@@ -59,6 +59,15 @@ const firebaseConfig = {
 };
 const appId = process.env.REACT_APP_FIREBASE_PROJECT_ID || 'prm-driva-default';
 
+// --- Funções Utilitárias ---
+const parseBrazilianCurrency = (value) => {
+    if (typeof value !== 'string') {
+        return parseFloat(value) || 0;
+    }
+    const cleanedValue = value.replace(/\./g, '').replace(',', '.');
+    return parseFloat(cleanedValue) || 0;
+};
+
 // --- Configurações do Programa de Parceria Driva ---
 const TIER_THRESHOLDS = {
     FINDER: { DIAMANTE: 30001, OURO: 5001 },
@@ -152,13 +161,13 @@ export default function App() {
 
     // --- Cálculo de Dados Derivados ---
     const partnersWithDetails = useMemo(() => {
-        const paymentsByPartner = filteredPayments.reduce((acc, p) => { acc[p.partnerId] = (acc[p.partnerId] || 0) + (parseFloat(p.paymentValue) || 0); return acc; }, {});
+        const paymentsByPartner = filteredPayments.reduce((acc, p) => { acc[p.partnerId] = (acc[p.partnerId] || 0) + (parseBrazilianCurrency(p.paymentValue) || 0); return acc; }, {});
         const dealsByPartner = filteredDeals.reduce((acc, d) => { if (!acc[d.partnerId]) acc[d.partnerId] = []; acc[d.partnerId].push(d); return acc; }, {});
         return partners.map(partner => {
             const paymentsReceived = paymentsByPartner[partner.id] || 0;
             const partnerDeals = dealsByPartner[partner.id] || [];
-            const generatedRevenue = partnerDeals.filter(d => d.status === 'Ganho').reduce((sum, d) => sum + (parseFloat(d.value) || 0), 0);
-            const totalOpportunitiesValue = partnerDeals.reduce((sum, d) => sum + (parseFloat(d.value) || 0), 0);
+            const generatedRevenue = partnerDeals.filter(d => d.status === 'Ganho').reduce((sum, d) => sum + (parseBrazilianCurrency(d.value) || 0), 0);
+            const totalOpportunitiesValue = partnerDeals.reduce((sum, d) => sum + (parseBrazilianCurrency(d.value) || 0), 0);
             const wonDealsCount = partnerDeals.filter(d => d.status === 'Ganho').length;
             const conversionRate = partnerDeals.length > 0 ? (wonDealsCount / partnerDeals.length) * 100 : 0;
             const type = partner.type || 'FINDER';
@@ -176,17 +185,7 @@ export default function App() {
     const handleDelete = (collectionName, id) => setItemToDelete({ collectionName, id });
     const confirmDelete = async () => { if (!db || !itemToDelete) return; try { await deleteDoc(doc(db, `artifacts/${appId}/public/data/${itemToDelete.collectionName}`, itemToDelete.id)); setItemToDelete(null); } catch (e) { console.error("Erro ao excluir:", e); } };
     
-    const handleBulkDelete = (collectionName, ids) => {
-        if(ids.length > 0) {
-            setBulkDeleteConfig({
-                collectionName,
-                ids,
-                title: `Excluir ${ids.length} itens?`,
-                message: `Tem a certeza de que deseja excluir os ${ids.length} itens selecionados?`
-            });
-        }
-    };
-
+    const handleBulkDelete = (collectionName, ids) => { if(ids.length > 0) setBulkDeleteConfig({ collectionName, ids, title: `Excluir ${ids.length} itens?`, message: `Tem a certeza de que deseja excluir os ${ids.length} itens selecionados?` }); };
     const confirmBulkDelete = async () => {
         if (!db || !bulkDeleteConfig) return;
         try {
@@ -194,15 +193,13 @@ export default function App() {
             const batch = writeBatch(db);
             ids.forEach(id => batch.delete(doc(db, `artifacts/${appId}/public/data/${collectionName}`, id)));
             await batch.commit();
-            
             if (collectionName === 'deals') setSelectedDeals([]);
             if (collectionName === 'payments') setSelectedPayments([]);
-            
             setBulkDeleteConfig(null);
         } catch (e) { console.error("Erro ao excluir em massa:", e); }
     };
 
-    const handleImport = async (file, collectionName) => { if (!file || !db) return; const partnersMap = new Map(partners.map(p => [p.name.toLowerCase(), p.id])); return new Promise((resolve, reject) => { window.Papa.parse(file, { header: true, skipEmptyLines: true, complete: async (res) => { const batch = writeBatch(db); const colRef = collection(db, `artifacts/${appId}/public/data/${collectionName}`); let s = 0, f = 0; res.data.forEach(item => { const pId = partnersMap.get(item.partnerName?.toLowerCase()); if (pId) { const newDoc = doc(colRef); let data = { partnerId: pId, partnerName: item.partnerName, createdAt: serverTimestamp() }; if (collectionName === 'payments') { data.clientName = item.clientName; data.paymentValue = parseFloat(item.paymentValue) || 0; data.paymentDate = Timestamp.fromDate(new Date(item.paymentDate.split(' ')[0])); } batch.set(newDoc, data); s++; } else { f++; } }); try { await batch.commit(); resolve({ successfulImports: s, failedImports: f }); } catch (e) { reject(e); } }, error: (e) => reject(e) }); }); };
+    const handleImport = async (file, collectionName) => { if (!file || !db) return; const partnersMap = new Map(partners.map(p => [p.name.toLowerCase(), p.id])); return new Promise((resolve, reject) => { window.Papa.parse(file, { header: true, skipEmptyLines: true, complete: async (res) => { const batch = writeBatch(db); const colRef = collection(db, `artifacts/${appId}/public/data/${collectionName}`); let s = 0, f = 0; res.data.forEach(item => { const pId = partnersMap.get(item.partnerName?.toLowerCase()); if (pId) { const newDoc = doc(colRef); let data = { partnerId: pId, partnerName: item.partnerName, createdAt: serverTimestamp() }; if (collectionName === 'payments') { data.clientName = item.clientName; data.paymentValue = parseBrazilianCurrency(item.paymentValue); data.paymentDate = Timestamp.fromDate(new Date(item.paymentDate.split(' ')[0])); } batch.set(newDoc, data); s++; } else { f++; } }); try { await batch.commit(); resolve({ successfulImports: s, failedImports: f }); } catch (e) { reject(e); } }, error: (e) => reject(e) }); }); };
 
     // --- Renderização ---
     if (isLoading) return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-semibold text-gray-700">A carregar PRM Driva...</div></div>;
@@ -212,7 +209,7 @@ export default function App() {
         <div className="flex h-screen bg-gray-50 font-sans">
             <Sidebar />
             <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-                <Header openModal={openModal} startDate={startDate} endDate={endDate} setStartDate={setStartDate} setEndDate={setEndDate} selectedDealsCount={selectedDeals.length} onBulkDeleteDeals={() => handleBulkDelete('deals', selectedDeals)} selectedPaymentsCount={selectedPayments.length} onBulkDeletePayments={() => handleBulkDelete('payments', selectedPayments)} />
+                <Header openModal={openModal} startDate={startDate} endDate={endDate} setStartDate={setStartDate} setEndDate={setEndDate} selectedDealsCount={selectedDeals.length} onBulkDeleteDeals={() => handleBulkDelete('deals', selectedDeals)} selectedPaymentsCount={selectedPayments.length} onBulkDeletePayments={() => handleBulkDelete('payments', selectedPayments)}/>
                 <div className="mt-6">
                     <Routes>
                         <Route path="/" element={<Dashboard partners={partnersWithDetails} deals={filteredDeals} />} />
@@ -351,7 +348,7 @@ const DealList = ({ deals, onEdit, onDelete, selectedDeals, setSelectedDeals, is
                         {!isMini && <td className="p-4 text-slate-600">{d.submissionDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td>}
                         <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
                         <td className="p-4 text-slate-600">{d.partnerName}</td>
-                        <td className="p-4 text-slate-600">R$ {parseFloat(d.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="p-4 text-slate-600">R$ {parseBrazilianCurrency(d.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                         <td className="p-4"><span className={`px-2 py-1 rounded-full text-sm font-semibold ${statusColors[d.status] || 'bg-gray-100'}`}>{d.status}</span></td>
                         {!isMini && <td className="p-4 relative"><ActionsMenu onEdit={() => onEdit(d)} onDelete={() => onDelete(d.id)} /></td>}
                     </tr>))}
@@ -369,7 +366,7 @@ const CommissioningList = ({ payments, selectedPayments, setSelectedPayments }) 
         <div className="bg-white rounded-xl shadow-md">
             <table className="w-full text-left">
                 <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4"><input type="checkbox" onChange={handleSelectAll} checked={payments.length > 0 && selectedPayments.length === payments.length} className="rounded" /></th><th className="p-4 font-semibold text-slate-600">Data do Pagamento</th><th className="p-4 font-semibold text-slate-600">Cliente Final</th><th className="p-4 font-semibold text-slate-600">Parceiro</th><th className="p-4 font-semibold text-slate-600">Valor Pago</th></tr></thead>
-                <tbody>{payments.map(p => (<tr key={p.id} className={`border-b border-slate-100 ${selectedPayments.includes(p.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}><td className="p-4"><input type="checkbox" checked={selectedPayments.includes(p.id)} onChange={(e) => handleSelectOne(e, p.id)} className="rounded" /></td><td className="p-4 text-slate-600">{p.paymentDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td><td className="p-4 text-slate-800 font-medium">{p.clientName}</td><td className="p-4 text-slate-600">{p.partnerName}</td><td className="p-4 text-slate-600 font-medium">R$ {p.paymentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>))}{payments.length === 0 && <tr><td colSpan="5"><p className="p-4 text-center text-gray-500">Nenhum pagamento encontrado.</p></td></tr>}</tbody>
+                <tbody>{payments.map(p => (<tr key={p.id} className={`border-b border-slate-100 ${selectedPayments.includes(p.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}><td className="p-4"><input type="checkbox" checked={selectedPayments.includes(p.id)} onChange={(e) => handleSelectOne(e, p.id)} className="rounded" /></td><td className="p-4 text-slate-600">{p.paymentDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td><td className="p-4 text-slate-800 font-medium">{p.clientName}</td><td className="p-4 text-slate-600">{p.partnerName}</td><td className="p-4 text-slate-600 font-medium">R$ {parseBrazilianCurrency(p.paymentValue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>))}{payments.length === 0 && <tr><td colSpan="5"><p className="p-4 text-center text-gray-500">Nenhum pagamento encontrado.</p></td></tr>}</tbody>
             </table>
         </div>
     );
