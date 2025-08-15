@@ -45,7 +45,8 @@ import {
     ArrowLeft,
     Mail,
     User,
-    TrendingUp
+    TrendingUp,
+    Target
 } from 'lucide-react';
 
 // --- Configuração do Firebase ---
@@ -70,11 +71,12 @@ const TIER_CONFIG = {
     OURO: { name: 'Ouro', icon: Trophy, color: 'text-amber-500', bgColor: 'bg-amber-100', commission: { FINDER: 10, SELLER: 20 } },
     PRATA: { name: 'Prata', icon: Star, color: 'text-gray-500', bgColor: 'bg-gray-100', commission: { FINDER: 5, SELLER: 15 } },
 };
-const getPartnerDetails = (revenue, type) => {
+// O tier é calculado com base nos pagamentos recebidos
+const getPartnerDetails = (paymentsReceived, type) => {
     const thresholds = TIER_THRESHOLDS[type];
-    if (revenue >= thresholds.DIAMANTE) return { ...TIER_CONFIG.DIAMANTE, commissionRate: TIER_CONFIG.DIAMANTE.commission[type] };
-    if (revenue >= thresholds.OURO) return { ...TIER_CONFIG.OURO, commissionRate: TIER_CONFIG.OURO.commission[type] };
-    if (revenue >= TIER_THRESHOLDS.PRATA_MIN) return { ...TIER_CONFIG.PRATA, commissionRate: TIER_CONFIG.PRATA.commission[type] };
+    if (paymentsReceived >= thresholds.DIAMANTE) return { ...TIER_CONFIG.DIAMANTE, commissionRate: TIER_CONFIG.DIAMANTE.commission[type] };
+    if (paymentsReceived >= thresholds.OURO) return { ...TIER_CONFIG.OURO, commissionRate: TIER_CONFIG.OURO.commission[type] };
+    if (paymentsReceived >= TIER_THRESHOLDS.PRATA_MIN) return { ...TIER_CONFIG.PRATA, commissionRate: TIER_CONFIG.PRATA.commission[type] };
     return { name: 'N/A', icon: Users, color: 'text-slate-400', bgColor: 'bg-slate-100', commissionRate: 0 };
 };
 
@@ -154,15 +156,16 @@ export default function App() {
         const paymentsByPartner = filteredPayments.reduce((acc, p) => { acc[p.partnerId] = (acc[p.partnerId] || 0) + (parseFloat(p.paymentValue) || 0); return acc; }, {});
         const dealsByPartner = filteredDeals.reduce((acc, d) => { if (!acc[d.partnerId]) acc[d.partnerId] = []; acc[d.partnerId].push(d); return acc; }, {});
         return partners.map(partner => {
-            const revenue = paymentsByPartner[partner.id] || 0;
+            const paymentsReceived = paymentsByPartner[partner.id] || 0;
             const partnerDeals = dealsByPartner[partner.id] || [];
+            const generatedRevenue = partnerDeals.filter(d => d.status === 'Ganho').reduce((sum, d) => sum + (parseFloat(d.value) || 0), 0);
             const totalOpportunitiesValue = partnerDeals.reduce((sum, d) => sum + (parseFloat(d.value) || 0), 0);
             const wonDealsCount = partnerDeals.filter(d => d.status === 'Ganho').length;
             const conversionRate = partnerDeals.length > 0 ? (wonDealsCount / partnerDeals.length) * 100 : 0;
             const type = partner.type || 'FINDER';
-            const tierDetails = getPartnerDetails(revenue, type);
-            const commissionToPay = revenue * (tierDetails.commissionRate / 100);
-            return { ...partner, revenue, tier: tierDetails, totalOpportunitiesValue, conversionRate, commissionToPay };
+            const tierDetails = getPartnerDetails(paymentsReceived, type);
+            const commissionToPay = paymentsReceived * (tierDetails.commissionRate / 100);
+            return { ...partner, paymentsReceived, tier: tierDetails, totalOpportunitiesValue, conversionRate, commissionToPay, generatedRevenue };
         });
     }, [partners, filteredDeals, filteredPayments]);
 
@@ -190,7 +193,7 @@ export default function App() {
                     <Routes>
                         <Route path="/" element={<Dashboard partners={partnersWithDetails} deals={filteredDeals} />} />
                         <Route path="/partners" element={<PartnerList partners={partnersWithDetails} onEdit={(p) => openModal('partner', p)} onDelete={(id) => handleDelete('partners', id)} />} />
-                        <Route path="/partners/:partnerId" element={<PartnerDetail allPartners={partners} allDeals={deals} allPayments={payments} />} />
+                        <Route path="/partners/:partnerId" element={<PartnerDetail allPartners={partnersWithDetails} />} />
                         <Route path="/deals" element={<DealList deals={filteredDeals} onEdit={(d) => openModal('deal', d)} onDelete={(id) => handleDelete('deals', id)} selectedDeals={selectedDeals} setSelectedDeals={setSelectedDeals} />} />
                         <Route path="/commissioning" element={<CommissioningList payments={filteredPayments} onImport={(file) => handleImport(file, 'payments')} />} />
                         <Route path="/resources" element={<ResourceHub resources={resources} onEdit={(r) => openModal('resource', r)} onDelete={(id) => handleDelete('resources', id)} />} />
@@ -214,21 +217,19 @@ const Sidebar = () => {
 
 const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selectedDealsCount, onBulkDelete }) => {
     const location = useLocation();
-    const params = useParams();
-    const view = location.pathname;
-    const isDetailView = view.includes('/partners/');
+    const isDetailView = location.pathname.includes('/partners/');
     const viewTitles = { '/': 'Dashboard de Canais', '/partners': 'Gestão de Parceiros', '/deals': 'Registro de Oportunidades', '/commissioning': 'Cálculo de Comissionamento', '/resources': 'Central de Recursos', '/nurturing': 'Nutrição de Parceiros', detail: 'Detalhes do Parceiro' };
-    const currentTitle = isDetailView ? viewTitles.detail : viewTitles[view];
+    const currentTitle = isDetailView ? viewTitles.detail : viewTitles[location.pathname];
     const buttonInfo = { '/partners': { label: 'Novo Parceiro', action: () => openModal('partner') }, '/deals': { label: 'Registrar Oportunidade', action: () => openModal('deal') }, '/resources': { label: 'Novo Recurso', action: () => openModal('resource') }, '/nurturing': { label: 'Novo Conteúdo', action: () => openModal('nurturing') }, };
-    const showFilters = ['/', '/partners', '/deals', '/commissioning'].includes(view) || isDetailView;
+    const showFilters = ['/', '/partners', '/deals', '/commissioning'].includes(location.pathname) || isDetailView;
     return (
         <div>
             <div className="flex flex-wrap justify-between items-center gap-4">
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">{currentTitle}</h1>
                 <div className="flex items-center gap-2">
-                    {view === '/deals' && selectedDealsCount > 0 && (<button onClick={onBulkDelete} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDealsCount})</span></button>)}
-                    {view === '/commissioning' && (<button onClick={() => openModal('importPayments')} className="flex items-center bg-green-500 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-green-600"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Pagamentos</span></button>)}
-                    {buttonInfo[view] && (<button onClick={() => buttonInfo[view].action()} className="flex items-center bg-sky-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-sky-600"><Plus className="h-5 w-5 mr-2" /><span className="font-semibold">{buttonInfo[view].label}</span></button>)}
+                    {location.pathname === '/deals' && selectedDealsCount > 0 && (<button onClick={onBulkDelete} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDealsCount})</span></button>)}
+                    {location.pathname === '/commissioning' && (<button onClick={() => openModal('importPayments')} className="flex items-center bg-green-500 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-green-600"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Pagamentos</span></button>)}
+                    {buttonInfo[location.pathname] && (<button onClick={() => buttonInfo[location.pathname].action()} className="flex items-center bg-sky-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-sky-600"><Plus className="h-5 w-5 mr-2" /><span className="font-semibold">{buttonInfo[location.pathname].label}</span></button>)}
                 </div>
             </div>
             {showFilters && (
@@ -244,11 +245,20 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
 };
 
 const Dashboard = ({ partners, deals }) => {
-    const generalStats = useMemo(() => {
-        const totalRevenue = partners.reduce((sum, p) => sum + p.revenue, 0);
-        return [ { title: 'Total de Parceiros', value: partners.length, icon: Users, color: 'text-blue-500' }, { title: 'Oportunidades no Período', value: deals.length, icon: Briefcase, color: 'text-orange-500' }, { title: 'Receita (Pagamentos) no Período', value: `R$ ${totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-green-500' }, ];
-    }, [partners, deals]);
-    return ( <div><div className="grid grid-cols-1 md:grid-cols-3 gap-6">{generalStats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div><div className="mt-8"><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div></div> );
+    const { totalPayments, totalGeneratedRevenue } = useMemo(() => {
+        const totalPayments = partners.reduce((sum, p) => sum + p.paymentsReceived, 0);
+        const totalGeneratedRevenue = partners.reduce((sum, p) => sum + p.generatedRevenue, 0);
+        return { totalPayments, totalGeneratedRevenue };
+    }, [partners]);
+    
+    const stats = [
+        { title: 'Total de Parceiros', value: partners.length, icon: Users, color: 'text-blue-500' },
+        { title: 'Oportunidades no Período', value: deals.length, icon: Briefcase, color: 'text-orange-500' },
+        { title: 'Receita Gerada (Ganhos)', value: `R$ ${totalGeneratedRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Target, color: 'text-indigo-500' },
+        { title: 'Pagamentos Recebidos', value: `R$ ${totalPayments.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-green-500' },
+    ];
+
+    return ( <div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">{stats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div><div className="mt-8"><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div></div> );
 };
 
 const PartnerList = ({ partners, onEdit, onDelete }) => {
@@ -256,13 +266,14 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
     return (
     <div className="bg-white rounded-xl shadow-md">
         <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4 font-semibold text-slate-600">Nome do Parceiro</th><th className="p-4 font-semibold text-slate-600">Tipo</th><th className="p-4 font-semibold text-slate-600">Nível</th><th className="p-4 font-semibold text-slate-600">Comissão a Pagar</th><th className="p-4 font-semibold text-slate-600">Ações</th></tr></thead>
+            <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4 font-semibold text-slate-600">Nome do Parceiro</th><th className="p-4 font-semibold text-slate-600">Tipo</th><th className="p-4 font-semibold text-slate-600">Nível</th><th className="p-4 font-semibold text-slate-600">Pagamentos Recebidos</th><th className="p-4 font-semibold text-slate-600">Comissão a Pagar</th><th className="p-4 font-semibold text-slate-600">Ações</th></tr></thead>
             <tbody>
                 {partners.map(p => (
                     <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => navigate(`/partners/${p.id}`)}>
                         <td className="p-4 text-slate-800 font-medium">{p.name}</td>
                         <td className="p-4 text-slate-600">{p.type}</td>
                         <td className="p-4"><span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center w-fit ${p.tier.bgColor} ${p.tier.color}`}><p.tier.icon className="h-4 w-4 mr-2" />{p.tier.name}</span></td>
+                        <td className="p-4 text-slate-600 font-medium">R$ {p.paymentsReceived.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                         <td className="p-4 text-green-600 font-bold">R$ {p.commissionToPay.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                         <td className="p-4 relative" onClick={(e) => e.stopPropagation()}><ActionsMenu onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} /></td>
                     </tr>
@@ -273,63 +284,29 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
     </div>
 )};
 
-const PartnerDetail = ({ allPartners, allDeals, allPayments }) => {
+const PartnerDetail = ({ allPartners }) => {
     const { partnerId } = useParams();
     const partner = allPartners.find(p => p.id === partnerId);
-
-    const { revenue, totalOpportunitiesValue, conversionRate, tier, commissionToPay } = useMemo(() => {
-        const partnerDeals = allDeals.filter(d => d.partnerId === partnerId);
-        const partnerPayments = allPayments.filter(p => p.partnerId === partnerId);
-        
-        const revenue = partnerPayments.reduce((sum, p) => sum + (parseFloat(p.paymentValue) || 0), 0);
-        const totalOpportunitiesValue = partnerDeals.reduce((sum, d) => sum + (parseFloat(d.value) || 0), 0);
-        const wonDealsCount = partnerDeals.filter(d => d.status === 'Ganho').length;
-        const conversionRate = partnerDeals.length > 0 ? (wonDealsCount / partnerDeals.length) * 100 : 0;
-        const type = partner?.type || 'FINDER';
-        const tierDetails = getPartnerDetails(revenue, type);
-        const commissionToPay = revenue * (tierDetails.commissionRate / 100);
-
-        return { revenue, totalOpportunitiesValue, conversionRate, tier: tierDetails, commissionToPay };
-    }, [partnerId, allPartners, allDeals, allPayments]);
-
     if (!partner) return <div className="text-center text-gray-500">Parceiro não encontrado.</div>;
-
     return (
         <div>
             <Link to="/partners" className="flex items-center text-sky-600 hover:underline mb-6 font-semibold"><ArrowLeft size={18} className="mr-2" />Voltar para a lista de parceiros</Link>
-            
-            <div className="bg-white p-6 rounded-xl shadow-md mb-6">
-                <div className="flex items-center">
-                    <div className={`p-3 rounded-full ${tier.bgColor}`}><tier.icon className={`h-10 w-10 ${tier.color}`} /></div>
-                    <div className="ml-4">
-                        <h2 className="text-3xl font-bold text-slate-800">{partner.name}</h2>
-                        <p className="text-gray-500">{partner.type}</p>
-                    </div>
-                </div>
-            </div>
-
+            <div className="bg-white p-6 rounded-xl shadow-md mb-6"><div className="flex items-center"><div className={`p-3 rounded-full ${partner.tier.bgColor}`}><partner.tier.icon className={`h-10 w-10 ${partner.tier.color}`} /></div><div className="ml-4"><h2 className="text-3xl font-bold text-slate-800">{partner.name}</h2><p className="text-gray-500">{partner.type}</p></div></div></div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="md:col-span-1 bg-white p-6 rounded-xl shadow-md">
-                    <h3 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><User size={20} className="mr-2 text-sky-500" />Informações de Contato</h3>
-                    <div className="space-y-2">
-                        <p className="text-gray-700"><strong>Nome:</strong> {partner.contactName}</p>
-                        <p className="text-gray-700"><strong>Email:</strong> {partner.contactEmail}</p>
-                    </div>
-                </div>
-                <div className="md:col-span-2 bg-white p-6 rounded-xl shadow-md">
-                    <h3 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><TrendingUp size={20} className="mr-2 text-sky-500" />Métricas (no período selecionado)</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div><p className="text-sm text-gray-500">Receita (Pagamentos)</p><p className="text-2xl font-bold text-green-600">R$ {revenue.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p></div>
-                        <div><p className="text-sm text-gray-500">Comissão a Pagar</p><p className="text-2xl font-bold text-green-600">R$ {commissionToPay.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p></div>
-                        <div><p className="text-sm text-gray-500">Oportunidades Geradas</p><p className="text-2xl font-bold text-slate-800">R$ {totalOpportunitiesValue.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p></div>
-                        <div><p className="text-sm text-gray-500">Taxa de Conversão</p><p className="text-2xl font-bold text-slate-800">{conversionRate.toFixed(1)}%</p></div>
+                <div className="md:col-span-1 bg-white p-6 rounded-xl shadow-md"><h3 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><User size={20} className="mr-2 text-sky-500" />Informações de Contato</h3><div className="space-y-2"><p className="text-gray-700"><strong>Nome:</strong> {partner.contactName}</p><p className="text-gray-700"><strong>Email:</strong> {partner.contactEmail}</p></div></div>
+                <div className="md:col-span-2 bg-white p-6 rounded-xl shadow-md"><h3 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><TrendingUp size={20} className="mr-2 text-sky-500" />Métricas (no período)</h3>
+                    <div className="grid grid-cols-2 gap-y-4 gap-x-2">
+                        <div><p className="text-sm text-gray-500">Pagamentos Recebidos</p><p className="text-2xl font-bold text-green-600">R$ {partner.paymentsReceived.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p></div>
+                        <div><p className="text-sm text-gray-500">Comissão a Pagar</p><p className="text-2xl font-bold text-green-600">R$ {partner.commissionToPay.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p></div>
+                        <div><p className="text-sm text-gray-500">Receita Gerada (Ganhos)</p><p className="text-2xl font-bold text-slate-800">R$ {partner.generatedRevenue.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p></div>
+                        <div><p className="text-sm text-gray-500">Oportunidades Geradas</p><p className="text-2xl font-bold text-slate-800">R$ {partner.totalOpportunitiesValue.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p></div>
+                        <div><p className="text-sm text-gray-500">Taxa de Conversão</p><p className="text-2xl font-bold text-slate-800">{partner.conversionRate.toFixed(1)}%</p></div>
                     </div>
                 </div>
             </div>
         </div>
     );
 };
-
 
 const DealList = ({ deals, onEdit, onDelete, selectedDeals, setSelectedDeals, isMini = false }) => {
     const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
@@ -366,7 +343,7 @@ const DealList = ({ deals, onEdit, onDelete, selectedDeals, setSelectedDeals, is
     );
 };
 
-const CommissioningList = ({ payments, onImport }) => (
+const CommissioningList = ({ payments }) => (
     <div className="bg-white rounded-xl shadow-md">
         <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4 font-semibold text-slate-600">Data do Pagamento</th><th className="p-4 font-semibold text-slate-600">Cliente Final</th><th className="p-4 font-semibold text-slate-600">Parceiro</th><th className="p-4 font-semibold text-slate-600">Valor Pago</th></tr></thead>
