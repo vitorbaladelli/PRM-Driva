@@ -43,7 +43,6 @@ import {
     AlertTriangle,
     BadgePercent,
     ArrowLeft,
-    Mail,
     User,
     TrendingUp,
     Target
@@ -71,7 +70,6 @@ const TIER_CONFIG = {
     OURO: { name: 'Ouro', icon: Trophy, color: 'text-amber-500', bgColor: 'bg-amber-100', commission: { FINDER: 10, SELLER: 20 } },
     PRATA: { name: 'Prata', icon: Star, color: 'text-gray-500', bgColor: 'bg-gray-100', commission: { FINDER: 5, SELLER: 15 } },
 };
-// O tier é calculado com base nos pagamentos recebidos
 const getPartnerDetails = (paymentsReceived, type) => {
     const thresholds = TIER_THRESHOLDS[type];
     if (paymentsReceived >= thresholds.DIAMANTE) return { ...TIER_CONFIG.DIAMANTE, commissionRate: TIER_CONFIG.DIAMANTE.commission[type] };
@@ -94,11 +92,12 @@ export default function App() {
     const [modalType, setModalType] = useState('');
     const [itemToEdit, setItemToEdit] = useState(null);
     const [itemToDelete, setItemToDelete] = useState(null);
-    const [itemsToDelete, setItemsToDelete] = useState([]);
+    const [bulkDeleteConfig, setBulkDeleteConfig] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [selectedDeals, setSelectedDeals] = useState([]);
+    const [selectedPayments, setSelectedPayments] = useState([]);
 
     // --- Efeito de Inicialização do Firebase ---
     useEffect(() => {
@@ -176,8 +175,33 @@ export default function App() {
     const handleUpdate = async (collectionName, id, data) => { if (!db) return; try { const docRef = doc(db, `artifacts/${appId}/public/data/${collectionName}`, id); const dataToUpdate = {...data}; if (collectionName === 'deals' && data.submissionDate) dataToUpdate.submissionDate = Timestamp.fromDate(new Date(data.submissionDate)); await updateDoc(docRef, dataToUpdate); closeModal(); } catch (e) { console.error("Erro ao atualizar:", e); } };
     const handleDelete = (collectionName, id) => setItemToDelete({ collectionName, id });
     const confirmDelete = async () => { if (!db || !itemToDelete) return; try { await deleteDoc(doc(db, `artifacts/${appId}/public/data/${itemToDelete.collectionName}`, itemToDelete.id)); setItemToDelete(null); } catch (e) { console.error("Erro ao excluir:", e); } };
-    const handleBulkDelete = () => { if (selectedDeals.length > 0) setItemsToDelete(selectedDeals); };
-    const confirmBulkDelete = async () => { if (!db || itemsToDelete.length === 0) return; try { const batch = writeBatch(db); itemsToDelete.forEach(id => batch.delete(doc(db, `artifacts/${appId}/public/data/deals`, id))); await batch.commit(); setItemsToDelete([]); setSelectedDeals([]); } catch (e) { console.error("Erro ao excluir em massa:", e); } };
+    
+    const handleBulkDelete = (collectionName, ids) => {
+        if(ids.length > 0) {
+            setBulkDeleteConfig({
+                collectionName,
+                ids,
+                title: `Excluir ${ids.length} itens?`,
+                message: `Tem a certeza de que deseja excluir os ${ids.length} itens selecionados?`
+            });
+        }
+    };
+
+    const confirmBulkDelete = async () => {
+        if (!db || !bulkDeleteConfig) return;
+        try {
+            const { collectionName, ids } = bulkDeleteConfig;
+            const batch = writeBatch(db);
+            ids.forEach(id => batch.delete(doc(db, `artifacts/${appId}/public/data/${collectionName}`, id)));
+            await batch.commit();
+            
+            if (collectionName === 'deals') setSelectedDeals([]);
+            if (collectionName === 'payments') setSelectedPayments([]);
+            
+            setBulkDeleteConfig(null);
+        } catch (e) { console.error("Erro ao excluir em massa:", e); }
+    };
+
     const handleImport = async (file, collectionName) => { if (!file || !db) return; const partnersMap = new Map(partners.map(p => [p.name.toLowerCase(), p.id])); return new Promise((resolve, reject) => { window.Papa.parse(file, { header: true, skipEmptyLines: true, complete: async (res) => { const batch = writeBatch(db); const colRef = collection(db, `artifacts/${appId}/public/data/${collectionName}`); let s = 0, f = 0; res.data.forEach(item => { const pId = partnersMap.get(item.partnerName?.toLowerCase()); if (pId) { const newDoc = doc(colRef); let data = { partnerId: pId, partnerName: item.partnerName, createdAt: serverTimestamp() }; if (collectionName === 'payments') { data.clientName = item.clientName; data.paymentValue = parseFloat(item.paymentValue) || 0; data.paymentDate = Timestamp.fromDate(new Date(item.paymentDate.split(' ')[0])); } batch.set(newDoc, data); s++; } else { f++; } }); try { await batch.commit(); resolve({ successfulImports: s, failedImports: f }); } catch (e) { reject(e); } }, error: (e) => reject(e) }); }); };
 
     // --- Renderização ---
@@ -188,14 +212,14 @@ export default function App() {
         <div className="flex h-screen bg-gray-50 font-sans">
             <Sidebar />
             <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-                <Header openModal={openModal} startDate={startDate} endDate={endDate} setStartDate={setStartDate} setEndDate={setEndDate} selectedDealsCount={selectedDeals.length} onBulkDelete={handleBulkDelete}/>
+                <Header openModal={openModal} startDate={startDate} endDate={endDate} setStartDate={setStartDate} setEndDate={setEndDate} selectedDealsCount={selectedDeals.length} onBulkDeleteDeals={() => handleBulkDelete('deals', selectedDeals)} selectedPaymentsCount={selectedPayments.length} onBulkDeletePayments={() => handleBulkDelete('payments', selectedPayments)} />
                 <div className="mt-6">
                     <Routes>
                         <Route path="/" element={<Dashboard partners={partnersWithDetails} deals={filteredDeals} />} />
                         <Route path="/partners" element={<PartnerList partners={partnersWithDetails} onEdit={(p) => openModal('partner', p)} onDelete={(id) => handleDelete('partners', id)} />} />
                         <Route path="/partners/:partnerId" element={<PartnerDetail allPartners={partnersWithDetails} />} />
                         <Route path="/deals" element={<DealList deals={filteredDeals} onEdit={(d) => openModal('deal', d)} onDelete={(id) => handleDelete('deals', id)} selectedDeals={selectedDeals} setSelectedDeals={setSelectedDeals} />} />
-                        <Route path="/commissioning" element={<CommissioningList payments={filteredPayments} onImport={(file) => handleImport(file, 'payments')} />} />
+                        <Route path="/commissioning" element={<CommissioningList payments={filteredPayments} onImport={(file) => handleImport(file, 'payments')} selectedPayments={selectedPayments} setSelectedPayments={setSelectedPayments} />} />
                         <Route path="/resources" element={<ResourceHub resources={resources} onEdit={(r) => openModal('resource', r)} onDelete={(id) => handleDelete('resources', id)} />} />
                         <Route path="/nurturing" element={<NurturingHub nurturingContent={nurturingContent} onEdit={(i) => openModal('nurturing', i)} onDelete={(id) => handleDelete('nurturing', id)} />} />
                     </Routes>
@@ -203,7 +227,7 @@ export default function App() {
             </main>
             {isModalOpen && <Modal closeModal={closeModal} modalType={modalType} handleAdd={handleAdd} handleUpdate={handleUpdate} handleImport={(file) => handleImport(file, 'payments')} partners={partners} initialData={itemToEdit} />}
             {itemToDelete && <ConfirmationModal onConfirm={confirmDelete} onCancel={() => setItemToDelete(null)} />}
-            {itemsToDelete.length > 0 && <ConfirmationModal onConfirm={confirmBulkDelete} onCancel={() => setItemsToDelete([])} title={`Excluir ${itemsToDelete.length} itens?`} message={`Tem a certeza de que deseja excluir os ${itemsToDelete.length} itens selecionados?`} />}
+            {bulkDeleteConfig && <ConfirmationModal onConfirm={confirmBulkDelete} onCancel={() => setBulkDeleteConfig(null)} title={bulkDeleteConfig.title} message={bulkDeleteConfig.message} />}
         </div>
     );
 }
@@ -215,7 +239,7 @@ const Sidebar = () => {
     return ( <aside className="w-16 sm:w-64 bg-slate-800 text-white flex flex-col"><div className="h-16 flex items-center justify-center sm:justify-start sm:px-6 border-b border-slate-700"><FileText className="h-8 w-8 text-sky-400" /><h1 className="hidden sm:block ml-3 text-xl font-bold">PRM Driva</h1></div><nav className="flex-1 mt-6"><ul>{navItems.map(item => (<li key={item.path} className="px-3 sm:px-6 py-1"><Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname.startsWith(item.path) && item.path !== '/' || location.pathname === item.path ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}><item.icon className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">{item.label}</span></Link></li>))}</ul></nav></aside> );
 };
 
-const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selectedDealsCount, onBulkDelete }) => {
+const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selectedDealsCount, onBulkDeleteDeals, selectedPaymentsCount, onBulkDeletePayments }) => {
     const location = useLocation();
     const isDetailView = location.pathname.includes('/partners/');
     const viewTitles = { '/': 'Dashboard de Canais', '/partners': 'Gestão de Parceiros', '/deals': 'Registro de Oportunidades', '/commissioning': 'Cálculo de Comissionamento', '/resources': 'Central de Recursos', '/nurturing': 'Nutrição de Parceiros', detail: 'Detalhes do Parceiro' };
@@ -227,7 +251,8 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
             <div className="flex flex-wrap justify-between items-center gap-4">
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">{currentTitle}</h1>
                 <div className="flex items-center gap-2">
-                    {location.pathname === '/deals' && selectedDealsCount > 0 && (<button onClick={onBulkDelete} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDealsCount})</span></button>)}
+                    {location.pathname === '/deals' && selectedDealsCount > 0 && (<button onClick={onBulkDeleteDeals} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDealsCount})</span></button>)}
+                    {location.pathname === '/commissioning' && selectedPaymentsCount > 0 && (<button onClick={onBulkDeletePayments} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedPaymentsCount})</span></button>)}
                     {location.pathname === '/commissioning' && (<button onClick={() => openModal('importPayments')} className="flex items-center bg-green-500 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-green-600"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Pagamentos</span></button>)}
                     {buttonInfo[location.pathname] && (<button onClick={() => buttonInfo[location.pathname].action()} className="flex items-center bg-sky-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-sky-600"><Plus className="h-5 w-5 mr-2" /><span className="font-semibold">{buttonInfo[location.pathname].label}</span></button>)}
                 </div>
@@ -250,14 +275,7 @@ const Dashboard = ({ partners, deals }) => {
         const totalGeneratedRevenue = partners.reduce((sum, p) => sum + p.generatedRevenue, 0);
         return { totalPayments, totalGeneratedRevenue };
     }, [partners]);
-    
-    const stats = [
-        { title: 'Total de Parceiros', value: partners.length, icon: Users, color: 'text-blue-500' },
-        { title: 'Oportunidades no Período', value: deals.length, icon: Briefcase, color: 'text-orange-500' },
-        { title: 'Receita Gerada (Ganhos)', value: `R$ ${totalGeneratedRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Target, color: 'text-indigo-500' },
-        { title: 'Pagamentos Recebidos', value: `R$ ${totalPayments.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-green-500' },
-    ];
-
+    const stats = [ { title: 'Total de Parceiros', value: partners.length, icon: Users, color: 'text-blue-500' }, { title: 'Oportunidades no Período', value: deals.length, icon: Briefcase, color: 'text-orange-500' }, { title: 'Receita Gerada (Ganhos)', value: `R$ ${totalGeneratedRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Target, color: 'text-indigo-500' }, { title: 'Pagamentos Recebidos', value: `R$ ${totalPayments.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-green-500' }, ];
     return ( <div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">{stats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div><div className="mt-8"><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div></div> );
 };
 
@@ -266,7 +284,7 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
     return (
     <div className="bg-white rounded-xl shadow-md">
         <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4 font-semibold text-slate-600">Nome do Parceiro</th><th className="p-4 font-semibold text-slate-600">Tipo</th><th className="p-4 font-semibold text-slate-600">Nível</th><th className="p-4 font-semibold text-slate-600">Pagamentos Recebidos</th><th className="p-4 font-semibold text-slate-600">Comissão a Pagar</th><th className="p-4 font-semibold text-slate-600">Ações</th></tr></thead>
+            <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4 font-semibold text-slate-600">Nome do Parceiro</th><th className="p-4 font-semibold text-slate-600">Tipo</th><th className="p-4 font-semibold text-slate-600">Nível</th><th className="p-4 font-semibold text-slate-600">Pagamentos Recebidos</th><th className="p-4 font-semibold text-slate-600">Receita Gerada (Ganhos)</th><th className="p-4 font-semibold text-slate-600">Comissão a Pagar</th><th className="p-4 font-semibold text-slate-600">Ações</th></tr></thead>
             <tbody>
                 {partners.map(p => (
                     <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => navigate(`/partners/${p.id}`)}>
@@ -274,6 +292,7 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
                         <td className="p-4 text-slate-600">{p.type}</td>
                         <td className="p-4"><span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center w-fit ${p.tier.bgColor} ${p.tier.color}`}><p.tier.icon className="h-4 w-4 mr-2" />{p.tier.name}</span></td>
                         <td className="p-4 text-slate-600 font-medium">R$ {p.paymentsReceived.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="p-4 text-slate-600 font-medium">R$ {p.generatedRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                         <td className="p-4 text-green-600 font-bold">R$ {p.commissionToPay.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                         <td className="p-4 relative" onClick={(e) => e.stopPropagation()}><ActionsMenu onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} /></td>
                     </tr>
@@ -343,14 +362,18 @@ const DealList = ({ deals, onEdit, onDelete, selectedDeals, setSelectedDeals, is
     );
 };
 
-const CommissioningList = ({ payments }) => (
-    <div className="bg-white rounded-xl shadow-md">
-        <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4 font-semibold text-slate-600">Data do Pagamento</th><th className="p-4 font-semibold text-slate-600">Cliente Final</th><th className="p-4 font-semibold text-slate-600">Parceiro</th><th className="p-4 font-semibold text-slate-600">Valor Pago</th></tr></thead>
-            <tbody>{payments.map(p => (<tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50"><td className="p-4 text-slate-600">{p.paymentDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td><td className="p-4 text-slate-800 font-medium">{p.clientName}</td><td className="p-4 text-slate-600">{p.partnerName}</td><td className="p-4 text-slate-600 font-medium">R$ {p.paymentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>))}{payments.length === 0 && <tr><td colSpan="4"><p className="p-4 text-center text-gray-500">Nenhum pagamento encontrado.</p></td></tr>}</tbody>
-        </table>
-    </div>
-);
+const CommissioningList = ({ payments, selectedPayments, setSelectedPayments }) => {
+    const handleSelectAll = (e) => setSelectedPayments(e.target.checked ? payments.map(p => p.id) : []);
+    const handleSelectOne = (e, id) => setSelectedPayments(e.target.checked ? [...selectedPayments, id] : selectedPayments.filter(pId => pId !== id));
+    return (
+        <div className="bg-white rounded-xl shadow-md">
+            <table className="w-full text-left">
+                <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4"><input type="checkbox" onChange={handleSelectAll} checked={payments.length > 0 && selectedPayments.length === payments.length} className="rounded" /></th><th className="p-4 font-semibold text-slate-600">Data do Pagamento</th><th className="p-4 font-semibold text-slate-600">Cliente Final</th><th className="p-4 font-semibold text-slate-600">Parceiro</th><th className="p-4 font-semibold text-slate-600">Valor Pago</th></tr></thead>
+                <tbody>{payments.map(p => (<tr key={p.id} className={`border-b border-slate-100 ${selectedPayments.includes(p.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}><td className="p-4"><input type="checkbox" checked={selectedPayments.includes(p.id)} onChange={(e) => handleSelectOne(e, p.id)} className="rounded" /></td><td className="p-4 text-slate-600">{p.paymentDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td><td className="p-4 text-slate-800 font-medium">{p.clientName}</td><td className="p-4 text-slate-600">{p.partnerName}</td><td className="p-4 text-slate-600 font-medium">R$ {p.paymentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>))}{payments.length === 0 && <tr><td colSpan="5"><p className="p-4 text-center text-gray-500">Nenhum pagamento encontrado.</p></td></tr>}</tbody>
+            </table>
+        </div>
+    );
+};
 
 const ResourceHub = ({ resources, onEdit, onDelete }) => ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{resources.map(r => (<div key={r.id} className="bg-white p-6 rounded-xl shadow-md flex flex-col relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(r)} onDelete={() => onDelete(r.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{r.title}</h3><p className="text-slate-600 mt-2 flex-grow">{r.description}</p><div className="mt-4 flex justify-between items-center"><span className="text-sm font-semibold bg-sky-100 text-sky-800 px-2 py-1 rounded-full">{r.category}</span><a href={r.url} target="_blank" rel="noopener noreferrer" className="font-bold text-sky-500 hover:text-sky-600">Aceder</a></div></div>))}{resources.length === 0 && <p className="p-4 text-center text-gray-500 col-span-full">Nenhum recurso disponível.</p>}</div>);
 const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => ( <div className="space-y-6">{nurturingContent.map(item => (<div key={item.id} className="bg-white p-6 rounded-xl shadow-md relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(item)} onDelete={() => onDelete(item.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{item.title}</h3><p className="text-sm text-gray-500 mt-1">{item.createdAt?.toDate().toLocaleDateString('pt-BR') || ''}</p><p className="text-slate-600 mt-4 whitespace-pre-wrap">{item.content}</p></div>))}{nurturingContent.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum conteúdo de nutrição publicado.</p>}</div>);
