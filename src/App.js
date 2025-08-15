@@ -95,9 +95,12 @@ export default function App() {
     const [modalType, setModalType] = useState('');
     const [itemToEdit, setItemToEdit] = useState(null);
     const [itemToDelete, setItemToDelete] = useState(null);
+    const [itemsToDelete, setItemsToDelete] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+    const [selectedDeals, setSelectedDeals] = useState([]);
+
 
     // --- Efeito de Inicialização do Firebase ---
     useEffect(() => {
@@ -287,6 +290,28 @@ export default function App() {
             console.error("Erro ao excluir documento: ", error);
         }
     };
+
+    const handleBulkDelete = () => {
+        if (selectedDeals.length > 0) {
+            setItemsToDelete(selectedDeals);
+        }
+    };
+
+    const confirmBulkDelete = async () => {
+        if (!db || itemsToDelete.length === 0) return;
+        try {
+            const batch = writeBatch(db);
+            itemsToDelete.forEach(id => {
+                const docRef = doc(db, `artifacts/${appId}/public/data/deals`, id);
+                batch.delete(docRef);
+            });
+            await batch.commit();
+            setItemsToDelete([]);
+            setSelectedDeals([]);
+        } catch (error) {
+            console.error("Erro ao excluir documentos em massa:", error);
+        }
+    };
     
     const handleImportDeals = async (file, selectedPartnerId) => {
         if (!file || !db || !selectedPartnerId) return;
@@ -381,12 +406,14 @@ export default function App() {
                     endDate={endDate}
                     setStartDate={setStartDate}
                     setEndDate={setEndDate}
+                    selectedDealsCount={selectedDeals.length}
+                    onBulkDelete={handleBulkDelete}
                 />
                 <div className="mt-6">
                     <Routes>
                         <Route path="/" element={<Dashboard partners={partnersWithDetails} deals={filteredDeals} />} />
                         <Route path="/partners" element={<PartnerList partners={partnersWithDetails} onEdit={(partner) => openModal('partner', partner)} onDelete={(id) => handleDelete('partners', id)} />} />
-                        <Route path="/deals" element={<DealList deals={filteredDeals} onEdit={(deal) => openModal('deal', deal)} onDelete={(id) => handleDelete('deals', id)} />} />
+                        <Route path="/deals" element={<DealList deals={filteredDeals} onEdit={(deal) => openModal('deal', deal)} onDelete={(id) => handleDelete('deals', id)} selectedDeals={selectedDeals} setSelectedDeals={setSelectedDeals} />} />
                         <Route path="/resources" element={<ResourceHub resources={resources} onEdit={(resource) => openModal('resource', resource)} onDelete={(id) => handleDelete('resources', id)} />} />
                         <Route path="/nurturing" element={<NurturingHub nurturingContent={nurturingContent} onEdit={(item) => openModal('nurturing', item)} onDelete={(id) => handleDelete('nurturing', id)} />} />
                     </Routes>
@@ -394,6 +421,7 @@ export default function App() {
             </main>
             {isModalOpen && <Modal closeModal={closeModal} modalType={modalType} handleAdd={handleAdd} handleUpdate={handleUpdate} handleImport={handleImportDeals} partners={partners} initialData={itemToEdit} />}
             {itemToDelete && <ConfirmationModal onConfirm={confirmDelete} onCancel={() => setItemToDelete(null)} />}
+            {itemsToDelete.length > 0 && <ConfirmationModal onConfirm={confirmBulkDelete} onCancel={() => setItemsToDelete([])} title={`Excluir ${itemsToDelete.length} itens?`} message={`Tem a certeza de que deseja excluir os ${itemsToDelete.length} itens selecionados? Esta ação não pode ser desfeita.`} />}
         </div>
     );
 }
@@ -442,7 +470,7 @@ const Sidebar = () => {
     );
 };
 
-const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate }) => {
+const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selectedDealsCount, onBulkDelete }) => {
     const location = useLocation();
     const view = location.pathname;
 
@@ -472,6 +500,15 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate }) => 
             <div className="flex flex-wrap justify-between items-center gap-4">
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">{viewTitles[view]}</h1>
                 <div className="flex items-center gap-2">
+                    {view === '/deals' && selectedDealsCount > 0 && (
+                        <button 
+                            onClick={onBulkDelete}
+                            className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700 transition-colors duration-200"
+                        >
+                            <Trash2 className="h-5 w-5 mr-2" />
+                            <span className="font-semibold">Excluir ({selectedDealsCount})</span>
+                        </button>
+                    )}
                     {view === '/deals' && (
                          <button 
                             onClick={() => openModal('importDeals')}
@@ -557,7 +594,7 @@ const Dashboard = ({ partners, deals }) => {
 
             <div className="mt-8">
                 <h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2>
-                <div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} isMini={true} onEdit={() => {}} onDelete={() => {}} /></div>
+                <div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} isMini={true} onEdit={() => {}} onDelete={() => {}} selectedDeals={[]} setSelectedDeals={() => {}}/></div>
             </div>
         </div>
     );
@@ -601,13 +638,31 @@ const PartnerList = ({ partners, onEdit, onDelete }) => (
     </div>
 );
 
-const DealList = ({ deals, onEdit, onDelete, isMini = false }) => {
+const DealList = ({ deals, onEdit, onDelete, selectedDeals, setSelectedDeals, isMini = false }) => {
     const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
+    
+    const handleSelectAll = (e) => {
+        if (e.target.checked) {
+            setSelectedDeals(deals.map(d => d.id));
+        } else {
+            setSelectedDeals([]);
+        }
+    };
+
+    const handleSelectOne = (e, id) => {
+        if (e.target.checked) {
+            setSelectedDeals([...selectedDeals, id]);
+        } else {
+            setSelectedDeals(selectedDeals.filter(dealId => dealId !== id));
+        }
+    };
+
     return (
         <div className={!isMini ? "bg-white rounded-xl shadow-md" : ""}>
             <table className="w-full text-left">
                 <thead className={!isMini ? "bg-slate-50 border-b border-slate-200" : ""}>
                     <tr>
+                        {!isMini && <th className="p-4"><input type="checkbox" onChange={handleSelectAll} checked={deals.length > 0 && selectedDeals.length === deals.length} className="rounded" /></th>}
                         {!isMini && <th className="p-4 font-semibold text-slate-600">Data</th>}
                         <th className="p-4 font-semibold text-slate-600">Cliente Final</th>
                         <th className="p-4 font-semibold text-slate-600">Parceiro</th>
@@ -618,7 +673,8 @@ const DealList = ({ deals, onEdit, onDelete, isMini = false }) => {
                 </thead>
                 <tbody>
                     {deals.map(d => (
-                        <tr key={d.id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <tr key={d.id} className={`border-b border-slate-100 ${selectedDeals.includes(d.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
+                            {!isMini && <td className="p-4"><input type="checkbox" checked={selectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
                             {!isMini && <td className="p-4 text-slate-600">{d.submissionDate ? d.submissionDate.toDate().toLocaleDateString('pt-BR') : 'N/A'}</td>}
                             <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
                             <td className="p-4 text-slate-600">{d.partnerName}</td>
@@ -700,14 +756,14 @@ const ActionsMenu = ({ onEdit, onDelete }) => {
     );
 };
 
-const ConfirmationModal = ({ onConfirm, onCancel }) => (
+const ConfirmationModal = ({ onConfirm, onCancel, title = "Confirmar Exclusão", message = "Tem a certeza de que deseja excluir este item? Esta ação não pode ser desfeita." }) => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center">
             <div className="mx-auto bg-red-100 rounded-full h-12 w-12 flex items-center justify-center">
                 <AlertTriangle className="h-6 w-6 text-red-600" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mt-4">Confirmar Exclusão</h3>
-            <p className="text-sm text-gray-500 mt-2">Tem a certeza de que deseja excluir este item? Esta ação não pode ser desfeita.</p>
+            <h3 className="text-lg font-medium text-gray-900 mt-4">{title}</h3>
+            <p className="text-sm text-gray-500 mt-2">{message}</p>
             <div className="mt-6 flex justify-center gap-4">
                 <button onClick={onCancel} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-semibold">Cancelar</button>
                 <button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold">Confirmar Exclusão</button>
