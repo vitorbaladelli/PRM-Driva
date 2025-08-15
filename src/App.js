@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Routes, Route, Link, useLocation } from 'react-router-dom';
+import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { initializeApp } from 'firebase/app';
 import { 
     getAuth, 
@@ -41,7 +41,11 @@ import {
     Edit,
     Trash2,
     AlertTriangle,
-    BadgePercent
+    BadgePercent,
+    ArrowLeft,
+    Mail,
+    User,
+    TrendingUp
 } from 'lucide-react';
 
 // --- Configuração do Firebase ---
@@ -100,59 +104,27 @@ export default function App() {
         script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js';
         script.async = true;
         document.head.appendChild(script);
-        
         try {
             if(firebaseConfig.apiKey) {
                 const app = initializeApp(firebaseConfig);
                 const authInstance = getAuth(app);
                 const dbInstance = getFirestore(app);
                 setDb(dbInstance);
-
                 const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
-                    if (!user) {
-                        await signInAnonymously(authInstance);
-                    }
+                    if (!user) await signInAnonymously(authInstance);
                     setIsAuthReady(true);
                 });
-                 return () => {
-                    unsubscribe();
-                    if (document.head.contains(script)) {
-                        document.head.removeChild(script);
-                    }
-                };
-            } else {
-                 console.error("Configuração do Firebase não encontrada.");
-                 setIsLoading(false);
-            }
-        } catch (error) {
-            console.error("Erro na inicialização do Firebase:", error);
-            setIsAuthReady(true);
-        }
+                return () => { unsubscribe(); if (document.head.contains(script)) document.head.removeChild(script); };
+            } else { setIsLoading(false); }
+        } catch (error) { console.error("Erro na inicialização do Firebase:", error); setIsAuthReady(true); }
     }, []);
 
     // --- Efeito para Carregar Dados do Firestore ---
     useEffect(() => {
         if (!isAuthReady || !db) return;
-        
         setIsLoading(false);
-        const collections = { 
-            partners: setPartners, 
-            deals: setDeals, 
-            resources: setResources, 
-            nurturing: setNurturingContent,
-            payments: setPayments
-        };
-
-        const unsubscribers = Object.entries(collections).map(([col, setter]) => {
-            const collectionPath = `artifacts/${appId}/public/data/${col}`;
-            const q = query(collection(db, collectionPath));
-            
-            return onSnapshot(q, (querySnapshot) => {
-                const items = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setter(items);
-            }, (error) => console.error(`Erro ao carregar ${col}:`, error));
-        });
-
+        const collections = { partners: setPartners, deals: setDeals, resources: setResources, nurturing: setNurturingContent, payments: setPayments };
+        const unsubscribers = Object.entries(collections).map(([col, setter]) => onSnapshot(query(collection(db, `artifacts/${appId}/public/data/${col}`)), (snapshot) => setter(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))), (error) => console.error(`Erro ao carregar ${col}:`, error)));
         return () => unsubscribers.forEach(unsub => unsub());
     }, [isAuthReady, db]);
 
@@ -161,11 +133,9 @@ export default function App() {
         if (!startDate && !endDate) return deals;
         const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
         const end = endDate ? new Date(`${endDate}T23:59:59`) : null;
-
         return deals.filter(deal => {
-            if (!deal.submissionDate?.toDate) return false;
-            const dealDate = deal.submissionDate.toDate();
-            return (!start || dealDate >= start) && (!end || dealDate <= end);
+            const dealDate = deal.submissionDate?.toDate();
+            return dealDate && (!start || dealDate >= start) && (!end || dealDate <= end);
         });
     }, [deals, startDate, endDate]);
     
@@ -173,28 +143,16 @@ export default function App() {
         if (!startDate && !endDate) return payments;
         const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
         const end = endDate ? new Date(`${endDate}T23:59:59`) : null;
-
         return payments.filter(payment => {
-            if (!payment.paymentDate?.toDate) return false;
-            const paymentDate = payment.paymentDate.toDate();
-            return (!start || paymentDate >= start) && (!end || paymentDate <= end);
+            const paymentDate = payment.paymentDate?.toDate();
+            return paymentDate && (!start || paymentDate >= start) && (!end || paymentDate <= end);
         });
     }, [payments, startDate, endDate]);
 
     // --- Cálculo de Dados Derivados ---
     const partnersWithDetails = useMemo(() => {
-        const paymentsByPartner = filteredPayments.reduce((acc, payment) => {
-            if (!acc[payment.partnerId]) acc[payment.partnerId] = 0;
-            acc[payment.partnerId] += parseFloat(payment.paymentValue) || 0;
-            return acc;
-        }, {});
-
-        const dealsByPartner = filteredDeals.reduce((acc, deal) => {
-            if (!acc[deal.partnerId]) acc[deal.partnerId] = [];
-            acc[deal.partnerId].push(deal);
-            return acc;
-        }, {});
-
+        const paymentsByPartner = filteredPayments.reduce((acc, p) => { acc[p.partnerId] = (acc[p.partnerId] || 0) + (parseFloat(p.paymentValue) || 0); return acc; }, {});
+        const dealsByPartner = filteredDeals.reduce((acc, d) => { if (!acc[d.partnerId]) acc[d.partnerId] = []; acc[d.partnerId].push(d); return acc; }, {});
         return partners.map(partner => {
             const revenue = paymentsByPartner[partner.id] || 0;
             const partnerDeals = dealsByPartner[partner.id] || [];
@@ -204,7 +162,6 @@ export default function App() {
             const type = partner.type || 'FINDER';
             const tierDetails = getPartnerDetails(revenue, type);
             const commissionToPay = revenue * (tierDetails.commissionRate / 100);
-            
             return { ...partner, revenue, tier: tierDetails, totalOpportunitiesValue, conversionRate, commissionToPay };
         });
     }, [partners, filteredDeals, filteredPayments]);
@@ -212,101 +169,17 @@ export default function App() {
     // --- Funções de CRUD ---
     const openModal = (type, data = null) => { setModalType(type); setItemToEdit(data); setIsModalOpen(true); };
     const closeModal = () => { setIsModalOpen(false); setModalType(''); setItemToEdit(null); };
-    
-    const handleAdd = async (collectionName, data) => {
-        if (!db) return;
-        try {
-            const collectionPath = `artifacts/${appId}/public/data/${collectionName}`;
-            const dataWithTimestamp = { ...data, createdAt: serverTimestamp() };
-            if (collectionName === 'deals' && data.submissionDate) {
-                dataWithTimestamp.submissionDate = Timestamp.fromDate(new Date(data.submissionDate));
-            } else if (collectionName === 'deals') {
-                dataWithTimestamp.submissionDate = Timestamp.now();
-            }
-            await addDoc(collection(db, collectionPath), dataWithTimestamp);
-            closeModal();
-        } catch (error) { console.error("Erro ao adicionar documento: ", error); }
-    };
-
-    const handleUpdate = async (collectionName, id, data) => {
-        if (!db) return;
-        try {
-            const docRef = doc(db, `artifacts/${appId}/public/data/${collectionName}`, id);
-            const dataToUpdate = {...data};
-            if (collectionName === 'deals' && data.submissionDate) {
-                 dataToUpdate.submissionDate = Timestamp.fromDate(new Date(data.submissionDate));
-            }
-            await updateDoc(docRef, dataToUpdate);
-            closeModal();
-        } catch (error) { console.error("Erro ao atualizar documento: ", error); }
-    };
-
+    const handleAdd = async (collectionName, data) => { if (!db) return; try { const path = `artifacts/${appId}/public/data/${collectionName}`; const dataWithTs = { ...data, createdAt: serverTimestamp() }; if (collectionName === 'deals' && data.submissionDate) dataWithTs.submissionDate = Timestamp.fromDate(new Date(data.submissionDate)); await addDoc(collection(db, path), dataWithTs); closeModal(); } catch (e) { console.error("Erro ao adicionar:", e); } };
+    const handleUpdate = async (collectionName, id, data) => { if (!db) return; try { const docRef = doc(db, `artifacts/${appId}/public/data/${collectionName}`, id); const dataToUpdate = {...data}; if (collectionName === 'deals' && data.submissionDate) dataToUpdate.submissionDate = Timestamp.fromDate(new Date(data.submissionDate)); await updateDoc(docRef, dataToUpdate); closeModal(); } catch (e) { console.error("Erro ao atualizar:", e); } };
     const handleDelete = (collectionName, id) => setItemToDelete({ collectionName, id });
-    const confirmDelete = async () => {
-        if (!db || !itemToDelete) return;
-        try {
-            await deleteDoc(doc(db, `artifacts/${appId}/public/data/${itemToDelete.collectionName}`, itemToDelete.id));
-            setItemToDelete(null);
-        } catch (error) { console.error("Erro ao excluir documento: ", error); }
-    };
-
+    const confirmDelete = async () => { if (!db || !itemToDelete) return; try { await deleteDoc(doc(db, `artifacts/${appId}/public/data/${itemToDelete.collectionName}`, itemToDelete.id)); setItemToDelete(null); } catch (e) { console.error("Erro ao excluir:", e); } };
     const handleBulkDelete = () => { if (selectedDeals.length > 0) setItemsToDelete(selectedDeals); };
-    const confirmBulkDelete = async () => {
-        if (!db || itemsToDelete.length === 0) return;
-        try {
-            const batch = writeBatch(db);
-            itemsToDelete.forEach(id => batch.delete(doc(db, `artifacts/${appId}/public/data/deals`, id)));
-            await batch.commit();
-            setItemsToDelete([]);
-            setSelectedDeals([]);
-        } catch (error) { console.error("Erro ao excluir documentos em massa:", error); }
-    };
-    
-    const handleImport = async (file, collectionName) => {
-        if (!file || !db) return;
-        const partnersMap = new Map(partners.map(p => [p.name.toLowerCase(), p.id]));
-        
-        return new Promise((resolve, reject) => {
-            window.Papa.parse(file, {
-                header: true,
-                skipEmptyLines: true,
-                complete: async (results) => {
-                    const itemsToImport = results.data;
-                    const batch = writeBatch(db);
-                    const collectionRef = collection(db, `artifacts/${appId}/public/data/${collectionName}`);
-                    let successfulImports = 0, failedImports = 0;
-
-                    itemsToImport.forEach(item => {
-                        const partnerId = partnersMap.get(item.partnerName?.toLowerCase());
-                        if (partnerId) {
-                            const newDocRef = doc(collectionRef);
-                            let dataToSet = { partnerId, partnerName: item.partnerName, createdAt: serverTimestamp() };
-
-                            if(collectionName === 'payments') {
-                                dataToSet.clientName = item.clientName;
-                                dataToSet.paymentValue = parseFloat(item.paymentValue) || 0;
-                                dataToSet.paymentDate = Timestamp.fromDate(new Date(item.paymentDate.split(' ')[0]));
-                            }
-                            batch.set(newDocRef, dataToSet);
-                            successfulImports++;
-                        } else {
-                            failedImports++;
-                        }
-                    });
-
-                    try {
-                        await batch.commit();
-                        resolve({ successfulImports, failedImports });
-                    } catch (error) { reject(error); }
-                },
-                error: (error) => reject(error)
-            });
-        });
-    };
+    const confirmBulkDelete = async () => { if (!db || itemsToDelete.length === 0) return; try { const batch = writeBatch(db); itemsToDelete.forEach(id => batch.delete(doc(db, `artifacts/${appId}/public/data/deals`, id))); await batch.commit(); setItemsToDelete([]); setSelectedDeals([]); } catch (e) { console.error("Erro ao excluir em massa:", e); } };
+    const handleImport = async (file, collectionName) => { if (!file || !db) return; const partnersMap = new Map(partners.map(p => [p.name.toLowerCase(), p.id])); return new Promise((resolve, reject) => { window.Papa.parse(file, { header: true, skipEmptyLines: true, complete: async (res) => { const batch = writeBatch(db); const colRef = collection(db, `artifacts/${appId}/public/data/${collectionName}`); let s = 0, f = 0; res.data.forEach(item => { const pId = partnersMap.get(item.partnerName?.toLowerCase()); if (pId) { const newDoc = doc(colRef); let data = { partnerId: pId, partnerName: item.partnerName, createdAt: serverTimestamp() }; if (collectionName === 'payments') { data.clientName = item.clientName; data.paymentValue = parseFloat(item.paymentValue) || 0; data.paymentDate = Timestamp.fromDate(new Date(item.paymentDate.split(' ')[0])); } batch.set(newDoc, data); s++; } else { f++; } }); try { await batch.commit(); resolve({ successfulImports: s, failedImports: f }); } catch (e) { reject(e); } }, error: (e) => reject(e) }); }); };
 
     // --- Renderização ---
     if (isLoading) return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-semibold text-gray-700">A carregar PRM Driva...</div></div>;
-    if (!firebaseConfig.apiKey) return <div className="flex items-center justify-center h-screen bg-red-50 text-red-800 p-8"><div className="text-center"><h2 className="text-2xl font-bold mb-4">Erro de Configuração</h2><p>As chaves de configuração do Firebase não foram encontradas.</p></div></div>;
+    if (!firebaseConfig.apiKey) return <div className="flex items-center justify-center h-screen bg-red-50 text-red-800 p-8"><div className="text-center"><h2 className="text-2xl font-bold mb-4">Erro de Configuração</h2><p>As chaves do Firebase não foram encontradas.</p></div></div>;
 
     return (
         <div className="flex h-screen bg-gray-50 font-sans">
@@ -317,6 +190,7 @@ export default function App() {
                     <Routes>
                         <Route path="/" element={<Dashboard partners={partnersWithDetails} deals={filteredDeals} />} />
                         <Route path="/partners" element={<PartnerList partners={partnersWithDetails} onEdit={(p) => openModal('partner', p)} onDelete={(id) => handleDelete('partners', id)} />} />
+                        <Route path="/partners/:partnerId" element={<PartnerDetail allPartners={partners} allDeals={deals} allPayments={payments} />} />
                         <Route path="/deals" element={<DealList deals={filteredDeals} onEdit={(d) => openModal('deal', d)} onDelete={(id) => handleDelete('deals', id)} selectedDeals={selectedDeals} setSelectedDeals={setSelectedDeals} />} />
                         <Route path="/commissioning" element={<CommissioningList payments={filteredPayments} onImport={(file) => handleImport(file, 'payments')} />} />
                         <Route path="/resources" element={<ResourceHub resources={resources} onEdit={(r) => openModal('resource', r)} onDelete={(id) => handleDelete('resources', id)} />} />
@@ -331,47 +205,26 @@ export default function App() {
     );
 }
 
-export function Root() { return <Routes><Route path="/*" element={<App />} /></Routes>; }
-
 // --- Componentes de UI ---
 const Sidebar = () => {
     const location = useLocation();
-    const navItems = [
-        { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-        { path: '/partners', label: 'Parceiros', icon: Users },
-        { path: '/deals', label: 'Oportunidades', icon: Briefcase },
-        { path: '/commissioning', label: 'Comissionamento', icon: BadgePercent },
-        { path: '/resources', label: 'Recursos', icon: Book },
-        { path: '/nurturing', label: 'Nutrição', icon: Lightbulb },
-    ];
-    return (
-        <aside className="w-16 sm:w-64 bg-slate-800 text-white flex flex-col">
-            <div className="h-16 flex items-center justify-center sm:justify-start sm:px-6 border-b border-slate-700">
-                 <FileText className="h-8 w-8 text-sky-400" />
-                 <h1 className="hidden sm:block ml-3 text-xl font-bold">PRM Driva</h1>
-            </div>
-            <nav className="flex-1 mt-6">
-                <ul>{navItems.map(item => (<li key={item.path} className="px-3 sm:px-6 py-1"><Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname === item.path ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}><item.icon className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">{item.label}</span></Link></li>))}</ul>
-            </nav>
-        </aside>
-    );
+    const navItems = [ { path: '/', label: 'Dashboard', icon: LayoutDashboard }, { path: '/partners', label: 'Parceiros', icon: Users }, { path: '/deals', label: 'Oportunidades', icon: Briefcase }, { path: '/commissioning', label: 'Comissionamento', icon: BadgePercent }, { path: '/resources', label: 'Recursos', icon: Book }, { path: '/nurturing', label: 'Nutrição', icon: Lightbulb }, ];
+    return ( <aside className="w-16 sm:w-64 bg-slate-800 text-white flex flex-col"><div className="h-16 flex items-center justify-center sm:justify-start sm:px-6 border-b border-slate-700"><FileText className="h-8 w-8 text-sky-400" /><h1 className="hidden sm:block ml-3 text-xl font-bold">PRM Driva</h1></div><nav className="flex-1 mt-6"><ul>{navItems.map(item => (<li key={item.path} className="px-3 sm:px-6 py-1"><Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname.startsWith(item.path) && item.path !== '/' || location.pathname === item.path ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}><item.icon className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">{item.label}</span></Link></li>))}</ul></nav></aside> );
 };
 
 const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selectedDealsCount, onBulkDelete }) => {
     const location = useLocation();
+    const params = useParams();
     const view = location.pathname;
-    const viewTitles = { '/': 'Dashboard de Canais', '/partners': 'Gestão de Parceiros', '/deals': 'Registro de Oportunidades', '/commissioning': 'Cálculo de Comissionamento', '/resources': 'Central de Recursos', '/nurturing': 'Nutrição de Parceiros' };
-    const buttonInfo = {
-        '/partners': { label: 'Novo Parceiro', action: () => openModal('partner') },
-        '/deals': { label: 'Registrar Oportunidade', action: () => openModal('deal') },
-        '/resources': { label: 'Novo Recurso', action: () => openModal('resource') },
-        '/nurturing': { label: 'Novo Conteúdo', action: () => openModal('nurturing') },
-    };
-    const showFilters = ['/', '/partners', '/deals', '/commissioning'].includes(view);
+    const isDetailView = view.includes('/partners/');
+    const viewTitles = { '/': 'Dashboard de Canais', '/partners': 'Gestão de Parceiros', '/deals': 'Registro de Oportunidades', '/commissioning': 'Cálculo de Comissionamento', '/resources': 'Central de Recursos', '/nurturing': 'Nutrição de Parceiros', detail: 'Detalhes do Parceiro' };
+    const currentTitle = isDetailView ? viewTitles.detail : viewTitles[view];
+    const buttonInfo = { '/partners': { label: 'Novo Parceiro', action: () => openModal('partner') }, '/deals': { label: 'Registrar Oportunidade', action: () => openModal('deal') }, '/resources': { label: 'Novo Recurso', action: () => openModal('resource') }, '/nurturing': { label: 'Novo Conteúdo', action: () => openModal('nurturing') }, };
+    const showFilters = ['/', '/partners', '/deals', '/commissioning'].includes(view) || isDetailView;
     return (
         <div>
             <div className="flex flex-wrap justify-between items-center gap-4">
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">{viewTitles[view]}</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">{currentTitle}</h1>
                 <div className="flex items-center gap-2">
                     {view === '/deals' && selectedDealsCount > 0 && (<button onClick={onBulkDelete} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDealsCount})</span></button>)}
                     {view === '/commissioning' && (<button onClick={() => openModal('importPayments')} className="flex items-center bg-green-500 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-green-600"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Pagamentos</span></button>)}
@@ -393,51 +246,90 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
 const Dashboard = ({ partners, deals }) => {
     const generalStats = useMemo(() => {
         const totalRevenue = partners.reduce((sum, p) => sum + p.revenue, 0);
-        return [
-            { title: 'Total de Parceiros', value: partners.length, icon: Users, color: 'text-blue-500' },
-            { title: 'Oportunidades no Período', value: deals.length, icon: Briefcase, color: 'text-orange-500' },
-            { title: 'Receita (Pagamentos) no Período', value: `R$ ${totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-green-500' },
-        ];
+        return [ { title: 'Total de Parceiros', value: partners.length, icon: Users, color: 'text-blue-500' }, { title: 'Oportunidades no Período', value: deals.length, icon: Briefcase, color: 'text-orange-500' }, { title: 'Receita (Pagamentos) no Período', value: `R$ ${totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-green-500' }, ];
     }, [partners, deals]);
-    return (
-        <div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">{generalStats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div>
-            <div className="mt-8"><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div>
-        </div>
-    );
+    return ( <div><div className="grid grid-cols-1 md:grid-cols-3 gap-6">{generalStats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div><div className="mt-8"><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div></div> );
 };
 
-const PartnerList = ({ partners, onEdit, onDelete }) => (
+const PartnerList = ({ partners, onEdit, onDelete }) => {
+    const navigate = useNavigate();
+    return (
     <div className="bg-white rounded-xl shadow-md">
         <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                    <th className="p-4 font-semibold text-slate-600">Nome do Parceiro</th>
-                    <th className="p-4 font-semibold text-slate-600">Tipo</th>
-                    <th className="p-4 font-semibold text-slate-600">Nível</th>
-                    <th className="p-4 font-semibold text-slate-600">Receita (Pagamentos)</th>
-                    <th className="p-4 font-semibold text-slate-600">Taxa de Conversão</th>
-                    <th className="p-4 font-semibold text-slate-600">Comissão a Pagar</th>
-                    <th className="p-4 font-semibold text-slate-600">Ações</th>
-                </tr>
-            </thead>
+            <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4 font-semibold text-slate-600">Nome do Parceiro</th><th className="p-4 font-semibold text-slate-600">Tipo</th><th className="p-4 font-semibold text-slate-600">Nível</th><th className="p-4 font-semibold text-slate-600">Comissão a Pagar</th><th className="p-4 font-semibold text-slate-600">Ações</th></tr></thead>
             <tbody>
                 {partners.map(p => (
-                    <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => navigate(`/partners/${p.id}`)}>
                         <td className="p-4 text-slate-800 font-medium">{p.name}</td>
                         <td className="p-4 text-slate-600">{p.type}</td>
                         <td className="p-4"><span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center w-fit ${p.tier.bgColor} ${p.tier.color}`}><p.tier.icon className="h-4 w-4 mr-2" />{p.tier.name}</span></td>
-                        <td className="p-4 text-slate-600 font-medium">R$ {p.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="p-4 text-slate-600 font-bold">{p.conversionRate.toFixed(1)}%</td>
                         <td className="p-4 text-green-600 font-bold">R$ {p.commissionToPay.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="p-4 relative"><ActionsMenu onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} /></td>
+                        <td className="p-4 relative" onClick={(e) => e.stopPropagation()}><ActionsMenu onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} /></td>
                     </tr>
                 ))}
             </tbody>
         </table>
          {partners.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum parceiro registrado.</p>}
     </div>
-);
+)};
+
+const PartnerDetail = ({ allPartners, allDeals, allPayments }) => {
+    const { partnerId } = useParams();
+    const partner = allPartners.find(p => p.id === partnerId);
+
+    const { revenue, totalOpportunitiesValue, conversionRate, tier, commissionToPay } = useMemo(() => {
+        const partnerDeals = allDeals.filter(d => d.partnerId === partnerId);
+        const partnerPayments = allPayments.filter(p => p.partnerId === partnerId);
+        
+        const revenue = partnerPayments.reduce((sum, p) => sum + (parseFloat(p.paymentValue) || 0), 0);
+        const totalOpportunitiesValue = partnerDeals.reduce((sum, d) => sum + (parseFloat(d.value) || 0), 0);
+        const wonDealsCount = partnerDeals.filter(d => d.status === 'Ganho').length;
+        const conversionRate = partnerDeals.length > 0 ? (wonDealsCount / partnerDeals.length) * 100 : 0;
+        const type = partner?.type || 'FINDER';
+        const tierDetails = getPartnerDetails(revenue, type);
+        const commissionToPay = revenue * (tierDetails.commissionRate / 100);
+
+        return { revenue, totalOpportunitiesValue, conversionRate, tier: tierDetails, commissionToPay };
+    }, [partnerId, allPartners, allDeals, allPayments]);
+
+    if (!partner) return <div className="text-center text-gray-500">Parceiro não encontrado.</div>;
+
+    return (
+        <div>
+            <Link to="/partners" className="flex items-center text-sky-600 hover:underline mb-6 font-semibold"><ArrowLeft size={18} className="mr-2" />Voltar para a lista de parceiros</Link>
+            
+            <div className="bg-white p-6 rounded-xl shadow-md mb-6">
+                <div className="flex items-center">
+                    <div className={`p-3 rounded-full ${tier.bgColor}`}><tier.icon className={`h-10 w-10 ${tier.color}`} /></div>
+                    <div className="ml-4">
+                        <h2 className="text-3xl font-bold text-slate-800">{partner.name}</h2>
+                        <p className="text-gray-500">{partner.type}</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="md:col-span-1 bg-white p-6 rounded-xl shadow-md">
+                    <h3 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><User size={20} className="mr-2 text-sky-500" />Informações de Contato</h3>
+                    <div className="space-y-2">
+                        <p className="text-gray-700"><strong>Nome:</strong> {partner.contactName}</p>
+                        <p className="text-gray-700"><strong>Email:</strong> {partner.contactEmail}</p>
+                    </div>
+                </div>
+                <div className="md:col-span-2 bg-white p-6 rounded-xl shadow-md">
+                    <h3 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><TrendingUp size={20} className="mr-2 text-sky-500" />Métricas (no período selecionado)</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div><p className="text-sm text-gray-500">Receita (Pagamentos)</p><p className="text-2xl font-bold text-green-600">R$ {revenue.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p></div>
+                        <div><p className="text-sm text-gray-500">Comissão a Pagar</p><p className="text-2xl font-bold text-green-600">R$ {commissionToPay.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p></div>
+                        <div><p className="text-sm text-gray-500">Oportunidades Geradas</p><p className="text-2xl font-bold text-slate-800">R$ {totalOpportunitiesValue.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</p></div>
+                        <div><p className="text-sm text-gray-500">Taxa de Conversão</p><p className="text-2xl font-bold text-slate-800">{conversionRate.toFixed(1)}%</p></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 const DealList = ({ deals, onEdit, onDelete, selectedDeals, setSelectedDeals, isMini = false }) => {
     const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
@@ -474,32 +366,14 @@ const DealList = ({ deals, onEdit, onDelete, selectedDeals, setSelectedDeals, is
     );
 };
 
-const CommissioningList = ({ payments }) => (
+const CommissioningList = ({ payments, onImport }) => (
     <div className="bg-white rounded-xl shadow-md">
         <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                    <th className="p-4 font-semibold text-slate-600">Data do Pagamento</th>
-                    <th className="p-4 font-semibold text-slate-600">Cliente Final</th>
-                    <th className="p-4 font-semibold text-slate-600">Parceiro</th>
-                    <th className="p-4 font-semibold text-slate-600">Valor Pago</th>
-                </tr>
-            </thead>
-            <tbody>
-                {payments.map(p => (
-                    <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="p-4 text-slate-600">{p.paymentDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td>
-                        <td className="p-4 text-slate-800 font-medium">{p.clientName}</td>
-                        <td className="p-4 text-slate-600">{p.partnerName}</td>
-                        <td className="p-4 text-slate-600 font-medium">R$ {p.paymentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                    </tr>
-                ))}
-            </tbody>
+            <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4 font-semibold text-slate-600">Data do Pagamento</th><th className="p-4 font-semibold text-slate-600">Cliente Final</th><th className="p-4 font-semibold text-slate-600">Parceiro</th><th className="p-4 font-semibold text-slate-600">Valor Pago</th></tr></thead>
+            <tbody>{payments.map(p => (<tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50"><td className="p-4 text-slate-600">{p.paymentDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td><td className="p-4 text-slate-800 font-medium">{p.clientName}</td><td className="p-4 text-slate-600">{p.partnerName}</td><td className="p-4 text-slate-600 font-medium">R$ {p.paymentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>))}{payments.length === 0 && <tr><td colSpan="4"><p className="p-4 text-center text-gray-500">Nenhum pagamento encontrado.</p></td></tr>}</tbody>
         </table>
-        {payments.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum pagamento encontrado para o período.</p>}
     </div>
 );
-
 
 const ResourceHub = ({ resources, onEdit, onDelete }) => ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{resources.map(r => (<div key={r.id} className="bg-white p-6 rounded-xl shadow-md flex flex-col relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(r)} onDelete={() => onDelete(r.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{r.title}</h3><p className="text-slate-600 mt-2 flex-grow">{r.description}</p><div className="mt-4 flex justify-between items-center"><span className="text-sm font-semibold bg-sky-100 text-sky-800 px-2 py-1 rounded-full">{r.category}</span><a href={r.url} target="_blank" rel="noopener noreferrer" className="font-bold text-sky-500 hover:text-sky-600">Aceder</a></div></div>))}{resources.length === 0 && <p className="p-4 text-center text-gray-500 col-span-full">Nenhum recurso disponível.</p>}</div>);
 const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => ( <div className="space-y-6">{nurturingContent.map(item => (<div key={item.id} className="bg-white p-6 rounded-xl shadow-md relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(item)} onDelete={() => onDelete(item.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{item.title}</h3><p className="text-sm text-gray-500 mt-1">{item.createdAt?.toDate().toLocaleDateString('pt-BR') || ''}</p><p className="text-slate-600 mt-4 whitespace-pre-wrap">{item.content}</p></div>))}{nurturingContent.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum conteúdo de nutrição publicado.</p>}</div>);
@@ -508,11 +382,7 @@ const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => ( <div classNam
 const ActionsMenu = ({ onEdit, onDelete }) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef(null);
-    useEffect(() => {
-        const handleClickOutside = (event) => { if (menuRef.current && !menuRef.current.contains(event.target)) setIsOpen(false); };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    useEffect(() => { const handleClickOutside = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setIsOpen(false); }; document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside); }, []);
     return (<div className="relative" ref={menuRef}><button onClick={() => setIsOpen(!isOpen)} className="p-2 rounded-full hover:bg-gray-200"><MoreVertical size={18} /></button>{isOpen && (<div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 border"><button onClick={() => { onEdit(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"><Edit size={16} className="mr-2" /> Editar</button><button onClick={() => { onDelete(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"><Trash2 size={16} className="mr-2" /> Excluir</button></div>)}</div>);
 };
 const ConfirmationModal = ({ onConfirm, onCancel, title = "Confirmar Exclusão", message = "Tem a certeza de que deseja excluir este item? Esta ação não pode ser desfeita." }) => (<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center"><div className="mx-auto bg-red-100 rounded-full h-12 w-12 flex items-center justify-center"><AlertTriangle className="h-6 w-6 text-red-600" /></div><h3 className="text-lg font-medium text-gray-900 mt-4">{title}</h3><p className="text-sm text-gray-500 mt-2">{message}</p><div className="mt-6 flex justify-center gap-4"><button onClick={onCancel} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-semibold">Cancelar</button><button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold">Confirmar Exclusão</button></div></div></div>);
@@ -584,4 +454,3 @@ const ImportPaymentsForm = ({ onSubmit, closeModal }) => {
     };
     return (<form onSubmit={handleSubmit} className="space-y-4"><div><label htmlFor="csv-upload" className="block text-sm font-medium text-gray-700 mb-2">Selecione um arquivo .csv</label><p className="text-xs text-gray-500 mb-2">A planilha deve conter: <code className="bg-gray-100 p-1 rounded">clientName</code>, <code className="bg-gray-100 p-1 rounded">partnerName</code>, <code className="bg-gray-100 p-1 rounded">paymentValue</code>, e <code className="bg-gray-100 p-1 rounded">paymentDate</code> (AAAA-MM-DD).</p><input id="csv-upload" type="file" accept=".csv" onChange={(e) => setFile(e.target.files[0])} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100"/></div>{importStatus && <p className="text-sm text-center font-medium text-gray-600">{importStatus}</p>}<FormButton disabled={isImporting || !file}>{isImporting ? 'Importando...' : 'Iniciar Importação'}</FormButton></form>);
 };
-
