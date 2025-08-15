@@ -398,6 +398,17 @@ export default function App() {
     );
 }
 
+// --- Componente de Roteamento ---
+// Usar HashRouter pode ajudar em alguns ambientes de hospedagem
+export function Root() {
+    return (
+        <Routes>
+            <Route path="/*" element={<App />} />
+        </Routes>
+    );
+}
+
+
 // --- Componentes de UI ---
 
 const Sidebar = () => {
@@ -553,16 +564,16 @@ const Dashboard = ({ partners, deals }) => {
 };
 
 const PartnerList = ({ partners, onEdit, onDelete }) => (
-    <div className="bg-white rounded-xl shadow-md overflow-hidden">
+    <div className="bg-white rounded-xl shadow-md">
         <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                     <th className="p-4 font-semibold text-slate-600">Nome do Parceiro</th>
                     <th className="p-4 font-semibold text-slate-600">Tipo</th>
-                    <th className="p-4 font-semibold text-slate-600">Nível</th>
-                    <th className="p-4 font-semibold text-slate-600">Receita Gerada</th>
-                    <th className="p-4 font-semibold text-slate-600">Oportunidades Geradas</th>
-                    <th className="p-4 font-semibold text-slate-600">Taxa de Conversão</th>
+                    <th className="p-4 font-semibold text-slate-600">Nível (no período)</th>
+                    <th className="p-4 font-semibold text-slate-600">Receita Gerada (no período)</th>
+                    <th className="p-4 font-semibold text-slate-600">Oportunidades Geradas (no período)</th>
+                    <th className="p-4 font-semibold text-slate-600">Taxa de Conversão (no período)</th>
                     <th className="p-4 font-semibold text-slate-600">Comissão</th>
                     <th className="p-4 font-semibold text-slate-600">Ações</th>
                 </tr>
@@ -581,7 +592,7 @@ const PartnerList = ({ partners, onEdit, onDelete }) => (
                         <td className="p-4 text-slate-600 font-medium">R$ {p.totalOpportunitiesValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                         <td className="p-4 text-slate-600 font-bold">{p.conversionRate.toFixed(1)}%</td>
                         <td className="p-4 text-slate-600 font-bold">{p.tier.commissionRate}%</td>
-                        <td className="p-4"><ActionsMenu onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} /></td>
+                        <td className="p-4 relative"><ActionsMenu onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} /></td>
                     </tr>
                 ))}
             </tbody>
@@ -593,7 +604,7 @@ const PartnerList = ({ partners, onEdit, onDelete }) => (
 const DealList = ({ deals, onEdit, onDelete, isMini = false }) => {
     const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
     return (
-        <div className={!isMini ? "bg-white rounded-xl shadow-md overflow-hidden" : ""}>
+        <div className={!isMini ? "bg-white rounded-xl shadow-md" : ""}>
             <table className="w-full text-left">
                 <thead className={!isMini ? "bg-slate-50 border-b border-slate-200" : ""}>
                     <tr>
@@ -613,7 +624,7 @@ const DealList = ({ deals, onEdit, onDelete, isMini = false }) => {
                             <td className="p-4 text-slate-600">{d.partnerName}</td>
                             <td className="p-4 text-slate-600">R$ {parseFloat(d.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                             <td className="p-4"><span className={`px-2 py-1 rounded-full text-sm font-semibold ${statusColors[d.status] || 'bg-gray-100 text-gray-800'}`}>{d.status}</span></td>
-                            {!isMini && <td className="p-4"><ActionsMenu onEdit={() => onEdit(d)} onDelete={() => onDelete(d.id)} /></td>}
+                            {!isMini && <td className="p-4 relative"><ActionsMenu onEdit={() => onEdit(d)} onDelete={() => onDelete(d.id)} /></td>}
                         </tr>
                     ))}
                 </tbody>
@@ -676,7 +687,7 @@ const ActionsMenu = ({ onEdit, onDelete }) => {
                 <MoreVertical size={18} />
             </button>
             {isOpen && (
-                <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-10 border">
+                <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 border">
                     <button onClick={() => { onEdit(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center">
                         <Edit size={16} className="mr-2" /> Editar
                     </button>
