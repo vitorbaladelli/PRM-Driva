@@ -40,11 +40,11 @@ import {
     MoreVertical,
     Edit,
     Trash2,
-    AlertTriangle
+    AlertTriangle,
+    BadgePercent
 } from 'lucide-react';
 
 // --- Configuração do Firebase ---
-// As chaves são carregadas a partir de Variáveis de Ambiente configuradas na Vercel
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
@@ -53,9 +53,7 @@ const firebaseConfig = {
   messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.REACT_APP_FIREBASE_APP_ID
 };
-
 const appId = process.env.REACT_APP_FIREBASE_PROJECT_ID || 'prm-driva-default';
-
 
 // --- Configurações do Programa de Parceria Driva ---
 const TIER_THRESHOLDS = {
@@ -63,32 +61,27 @@ const TIER_THRESHOLDS = {
     SELLER: { DIAMANTE: 20001, OURO: 5001 },
     PRATA_MIN: 499,
 };
-
 const TIER_CONFIG = {
     DIAMANTE: { name: 'Diamante', icon: Gem, color: 'text-cyan-500', bgColor: 'bg-cyan-100', commission: { FINDER: 15, SELLER: 25 } },
     OURO: { name: 'Ouro', icon: Trophy, color: 'text-amber-500', bgColor: 'bg-amber-100', commission: { FINDER: 10, SELLER: 20 } },
     PRATA: { name: 'Prata', icon: Star, color: 'text-gray-500', bgColor: 'bg-gray-100', commission: { FINDER: 5, SELLER: 15 } },
 };
-
 const getPartnerDetails = (revenue, type) => {
     const thresholds = TIER_THRESHOLDS[type];
     if (revenue >= thresholds.DIAMANTE) return { ...TIER_CONFIG.DIAMANTE, commissionRate: TIER_CONFIG.DIAMANTE.commission[type] };
     if (revenue >= thresholds.OURO) return { ...TIER_CONFIG.OURO, commissionRate: TIER_CONFIG.OURO.commission[type] };
     if (revenue >= TIER_THRESHOLDS.PRATA_MIN) return { ...TIER_CONFIG.PRATA, commissionRate: TIER_CONFIG.PRATA.commission[type] };
-    
     return { name: 'N/A', icon: Users, color: 'text-slate-400', bgColor: 'bg-slate-100', commissionRate: 0 };
 };
-
 
 // --- Componente Principal do App ---
 export default function App() {
     // --- Estados ---
     const [db, setDb] = useState(null);
-    const [auth, setAuth] = useState(null);
-    const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false);
     const [partners, setPartners] = useState([]);
     const [deals, setDeals] = useState([]);
+    const [payments, setPayments] = useState([]);
     const [resources, setResources] = useState([]);
     const [nurturingContent, setNurturingContent] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -100,7 +93,6 @@ export default function App() {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [selectedDeals, setSelectedDeals] = useState([]);
-
 
     // --- Efeito de Inicialização do Firebase ---
     useEffect(() => {
@@ -114,13 +106,10 @@ export default function App() {
                 const app = initializeApp(firebaseConfig);
                 const authInstance = getAuth(app);
                 const dbInstance = getFirestore(app);
-                setAuth(authInstance);
                 setDb(dbInstance);
 
                 const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
-                    if (user) {
-                        setUserId(user.uid);
-                    } else {
+                    if (!user) {
                         await signInAnonymously(authInstance);
                     }
                     setIsAuthReady(true);
@@ -132,7 +121,7 @@ export default function App() {
                     }
                 };
             } else {
-                 console.error("Configuração do Firebase não encontrada. Verifique as variáveis de ambiente.");
+                 console.error("Configuração do Firebase não encontrada.");
                  setIsLoading(false);
             }
         } catch (error) {
@@ -143,12 +132,16 @@ export default function App() {
 
     // --- Efeito para Carregar Dados do Firestore ---
     useEffect(() => {
-        if (!isAuthReady || !db) {
-            return;
-        }
+        if (!isAuthReady || !db) return;
         
         setIsLoading(false);
-        const collections = { partners: setPartners, deals: setDeals, resources: setResources, nurturing: setNurturingContent };
+        const collections = { 
+            partners: setPartners, 
+            deals: setDeals, 
+            resources: setResources, 
+            nurturing: setNurturingContent,
+            payments: setPayments
+        };
 
         const unsubscribers = Object.entries(collections).map(([col, setter]) => {
             const collectionPath = `artifacts/${appId}/public/data/${col}`;
@@ -156,9 +149,6 @@ export default function App() {
             
             return onSnapshot(q, (querySnapshot) => {
                 const items = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                if (items.length > 0 && items[0].createdAt) {
-                    items.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
-                }
                 setter(items);
             }, (error) => console.error(`Erro ao carregar ${col}:`, error));
         });
@@ -168,97 +158,74 @@ export default function App() {
 
     // --- Lógica de Filtragem por Data ---
     const filteredDeals = useMemo(() => {
-        if (!startDate && !endDate) {
-            return deals;
-        }
+        if (!startDate && !endDate) return deals;
         const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
         const end = endDate ? new Date(`${endDate}T23:59:59`) : null;
 
         return deals.filter(deal => {
-            if (!deal.submissionDate || !deal.submissionDate.toDate) return false;
+            if (!deal.submissionDate?.toDate) return false;
             const dealDate = deal.submissionDate.toDate();
-            
-            const isAfterStart = start ? dealDate >= start : true;
-            const isBeforeEnd = end ? dealDate <= end : true;
-
-            return isAfterStart && isBeforeEnd;
+            return (!start || dealDate >= start) && (!end || dealDate <= end);
         });
     }, [deals, startDate, endDate]);
+    
+    const filteredPayments = useMemo(() => {
+        if (!startDate && !endDate) return payments;
+        const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
+        const end = endDate ? new Date(`${endDate}T23:59:59`) : null;
 
-    // --- Cálculo de Dados Derivados (Níveis, Receita, etc.) ---
+        return payments.filter(payment => {
+            if (!payment.paymentDate?.toDate) return false;
+            const paymentDate = payment.paymentDate.toDate();
+            return (!start || paymentDate >= start) && (!end || paymentDate <= end);
+        });
+    }, [payments, startDate, endDate]);
+
+    // --- Cálculo de Dados Derivados ---
     const partnersWithDetails = useMemo(() => {
+        const paymentsByPartner = filteredPayments.reduce((acc, payment) => {
+            if (!acc[payment.partnerId]) acc[payment.partnerId] = 0;
+            acc[payment.partnerId] += parseFloat(payment.paymentValue) || 0;
+            return acc;
+        }, {});
+
         const dealsByPartner = filteredDeals.reduce((acc, deal) => {
-            if (!acc[deal.partnerId]) {
-                acc[deal.partnerId] = [];
-            }
+            if (!acc[deal.partnerId]) acc[deal.partnerId] = [];
             acc[deal.partnerId].push(deal);
             return acc;
         }, {});
 
         return partners.map(partner => {
+            const revenue = paymentsByPartner[partner.id] || 0;
             const partnerDeals = dealsByPartner[partner.id] || [];
-            
-            const revenue = partnerDeals
-                .filter(d => d.status === 'Ganho')
-                .reduce((sum, d) => sum + (parseFloat(d.value) || 0), 0);
-            
-            const totalOpportunitiesValue = partnerDeals
-                .reduce((sum, d) => sum + (parseFloat(d.value) || 0), 0);
-                
+            const totalOpportunitiesValue = partnerDeals.reduce((sum, d) => sum + (parseFloat(d.value) || 0), 0);
             const wonDealsCount = partnerDeals.filter(d => d.status === 'Ganho').length;
-            const totalDealsCount = partnerDeals.length;
-            const conversionRate = totalDealsCount > 0 ? (wonDealsCount / totalDealsCount) * 100 : 0;
-
+            const conversionRate = partnerDeals.length > 0 ? (wonDealsCount / partnerDeals.length) * 100 : 0;
             const type = partner.type || 'FINDER';
             const tierDetails = getPartnerDetails(revenue, type);
+            const commissionToPay = revenue * (tierDetails.commissionRate / 100);
             
-            return { 
-                ...partner, 
-                revenue, 
-                tier: tierDetails,
-                totalOpportunitiesValue,
-                conversionRate
-            };
+            return { ...partner, revenue, tier: tierDetails, totalOpportunitiesValue, conversionRate, commissionToPay };
         });
-    }, [partners, filteredDeals]);
+    }, [partners, filteredDeals, filteredPayments]);
 
     // --- Funções de CRUD ---
-    const openModal = (type, data = null) => { 
-        setModalType(type); 
-        setItemToEdit(data);
-        setIsModalOpen(true); 
-    };
-    const closeModal = () => { 
-        setIsModalOpen(false); 
-        setModalType('');
-        setItemToEdit(null);
-    };
+    const openModal = (type, data = null) => { setModalType(type); setItemToEdit(data); setIsModalOpen(true); };
+    const closeModal = () => { setIsModalOpen(false); setModalType(''); setItemToEdit(null); };
     
     const handleAdd = async (collectionName, data) => {
         if (!db) return;
         try {
             const collectionPath = `artifacts/${appId}/public/data/${collectionName}`;
-            const dataWithTimestamp = {
-                ...data,
-                createdAt: serverTimestamp(),
-                authorId: userId,
-            };
+            const dataWithTimestamp = { ...data, createdAt: serverTimestamp() };
             if (collectionName === 'deals' && data.submissionDate) {
-                const dateObj = new Date(data.submissionDate);
-                if (!isNaN(dateObj.getTime())) {
-                    dataWithTimestamp.submissionDate = Timestamp.fromDate(dateObj);
-                } else {
-                     dataWithTimestamp.submissionDate = Timestamp.now();
-                }
+                dataWithTimestamp.submissionDate = Timestamp.fromDate(new Date(data.submissionDate));
             } else if (collectionName === 'deals') {
                 dataWithTimestamp.submissionDate = Timestamp.now();
             }
-
             await addDoc(collection(db, collectionPath), dataWithTimestamp);
             closeModal();
-        } catch (error) {
-            console.error("Erro ao adicionar documento: ", error);
-        }
+        } catch (error) { console.error("Erro ao adicionar documento: ", error); }
     };
 
     const handleUpdate = async (collectionName, id, data) => {
@@ -271,93 +238,58 @@ export default function App() {
             }
             await updateDoc(docRef, dataToUpdate);
             closeModal();
-        } catch (error) {
-            console.error("Erro ao atualizar documento: ", error);
-        }
+        } catch (error) { console.error("Erro ao atualizar documento: ", error); }
     };
 
-    const handleDelete = (collectionName, id) => {
-        setItemToDelete({ collectionName, id });
-    };
-
+    const handleDelete = (collectionName, id) => setItemToDelete({ collectionName, id });
     const confirmDelete = async () => {
         if (!db || !itemToDelete) return;
         try {
-            const { collectionName, id } = itemToDelete;
-            await deleteDoc(doc(db, `artifacts/${appId}/public/data/${collectionName}`, id));
+            await deleteDoc(doc(db, `artifacts/${appId}/public/data/${itemToDelete.collectionName}`, itemToDelete.id));
             setItemToDelete(null);
-        } catch (error) {
-            console.error("Erro ao excluir documento: ", error);
-        }
+        } catch (error) { console.error("Erro ao excluir documento: ", error); }
     };
 
-    const handleBulkDelete = () => {
-        if (selectedDeals.length > 0) {
-            setItemsToDelete(selectedDeals);
-        }
-    };
-
+    const handleBulkDelete = () => { if (selectedDeals.length > 0) setItemsToDelete(selectedDeals); };
     const confirmBulkDelete = async () => {
         if (!db || itemsToDelete.length === 0) return;
         try {
             const batch = writeBatch(db);
-            itemsToDelete.forEach(id => {
-                const docRef = doc(db, `artifacts/${appId}/public/data/deals`, id);
-                batch.delete(docRef);
-            });
+            itemsToDelete.forEach(id => batch.delete(doc(db, `artifacts/${appId}/public/data/deals`, id)));
             await batch.commit();
             setItemsToDelete([]);
             setSelectedDeals([]);
-        } catch (error) {
-            console.error("Erro ao excluir documentos em massa:", error);
-        }
+        } catch (error) { console.error("Erro ao excluir documentos em massa:", error); }
     };
     
-    const handleImportDeals = async (file, selectedPartnerId) => {
-        if (!file || !db || !selectedPartnerId) return;
-
-        const selectedPartner = partners.find(p => p.id === selectedPartnerId);
-        if (!selectedPartner) {
-            console.error("Parceiro selecionado não encontrado.");
-            return;
-        }
-
+    const handleImport = async (file, collectionName) => {
+        if (!file || !db) return;
+        const partnersMap = new Map(partners.map(p => [p.name.toLowerCase(), p.id]));
+        
         return new Promise((resolve, reject) => {
             window.Papa.parse(file, {
                 header: true,
                 skipEmptyLines: true,
                 complete: async (results) => {
-                    const dealsToImport = results.data;
+                    const itemsToImport = results.data;
                     const batch = writeBatch(db);
-                    const dealsCollectionRef = collection(db, `artifacts/${appId}/public/data/deals`);
-                    let successfulImports = 0;
-                    let failedImports = 0;
+                    const collectionRef = collection(db, `artifacts/${appId}/public/data/${collectionName}`);
+                    let successfulImports = 0, failedImports = 0;
 
-                    dealsToImport.forEach(deal => {
-                        const submissionDateStr = deal.submissionDate ? deal.submissionDate.trim() : null;
-                        if (deal.clientName && deal.value && deal.status && submissionDateStr) {
-                            const datePart = submissionDateStr.split(' ')[0];
-                            const dateObj = new Date(datePart);
-                            
-                            if(!isNaN(dateObj.getTime())){
-                                const newDealRef = doc(dealsCollectionRef);
-                                batch.set(newDealRef, {
-                                    clientName: deal.clientName,
-                                    partnerId: selectedPartnerId,
-                                    partnerName: selectedPartner.name,
-                                    value: parseFloat(deal.value) || 0,
-                                    status: deal.status,
-                                    submissionDate: Timestamp.fromDate(dateObj),
-                                    createdAt: serverTimestamp(),
-                                    authorId: userId,
-                                });
-                                successfulImports++;
-                            } else {
-                                console.warn("Oportunidade ignorada (data inválida):", deal);
-                                failedImports++;
+                    itemsToImport.forEach(item => {
+                        const partnerId = partnersMap.get(item.partnerName?.toLowerCase());
+                        if (partnerId) {
+                            const newDocRef = doc(collectionRef);
+                            let dataToSet = { partnerId, partnerName: item.partnerName, createdAt: serverTimestamp() };
+
+                            if(collectionName === 'payments') {
+                                dataToSet.clientName = item.clientName;
+                                dataToSet.paymentValue = parseFloat(item.paymentValue) || 0;
+                                dataToSet.paymentDate = Timestamp.fromDate(new Date(item.paymentDate.split(' ')[0]));
                             }
+                            batch.set(newDocRef, dataToSet);
+                            successfulImports++;
                         } else {
-                            console.warn("Oportunidade ignorada (dados em falta):", deal);
                             failedImports++;
                         }
                     });
@@ -365,86 +297,50 @@ export default function App() {
                     try {
                         await batch.commit();
                         resolve({ successfulImports, failedImports });
-                    } catch (error) {
-                        console.error("Erro ao fazer batch-write das oportunidades:", error);
-                        reject(error);
-                    }
+                    } catch (error) { reject(error); }
                 },
-                error: (error) => {
-                    console.error("Erro ao analisar o CSV:", error);
-                    reject(error);
-                }
+                error: (error) => reject(error)
             });
         });
     };
 
-
-    // --- Renderização Principal ---
-    if (isLoading) {
-        return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-semibold text-gray-700">A carregar PRM Driva...</div></div>;
-    }
-
-     if (!firebaseConfig.apiKey) {
-        return (
-            <div className="flex items-center justify-center h-screen bg-red-50 text-red-800 p-8">
-                <div className="text-center">
-                    <h2 className="text-2xl font-bold mb-4">Erro de Configuração</h2>
-                    <p>As chaves de configuração do Firebase não foram encontradas.</p>
-                     <p className="mt-2">Por favor, configure as variáveis de ambiente no seu serviço de hospedagem (Vercel) para continuar.</p>
-                </div>
-            </div>
-        );
-    }
+    // --- Renderização ---
+    if (isLoading) return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-semibold text-gray-700">A carregar PRM Driva...</div></div>;
+    if (!firebaseConfig.apiKey) return <div className="flex items-center justify-center h-screen bg-red-50 text-red-800 p-8"><div className="text-center"><h2 className="text-2xl font-bold mb-4">Erro de Configuração</h2><p>As chaves de configuração do Firebase não foram encontradas.</p></div></div>;
 
     return (
         <div className="flex h-screen bg-gray-50 font-sans">
             <Sidebar />
             <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-                <Header 
-                    openModal={openModal} 
-                    startDate={startDate}
-                    endDate={endDate}
-                    setStartDate={setStartDate}
-                    setEndDate={setEndDate}
-                    selectedDealsCount={selectedDeals.length}
-                    onBulkDelete={handleBulkDelete}
-                />
+                <Header openModal={openModal} startDate={startDate} endDate={endDate} setStartDate={setStartDate} setEndDate={setEndDate} selectedDealsCount={selectedDeals.length} onBulkDelete={handleBulkDelete}/>
                 <div className="mt-6">
                     <Routes>
                         <Route path="/" element={<Dashboard partners={partnersWithDetails} deals={filteredDeals} />} />
-                        <Route path="/partners" element={<PartnerList partners={partnersWithDetails} onEdit={(partner) => openModal('partner', partner)} onDelete={(id) => handleDelete('partners', id)} />} />
-                        <Route path="/deals" element={<DealList deals={filteredDeals} onEdit={(deal) => openModal('deal', deal)} onDelete={(id) => handleDelete('deals', id)} selectedDeals={selectedDeals} setSelectedDeals={setSelectedDeals} />} />
-                        <Route path="/resources" element={<ResourceHub resources={resources} onEdit={(resource) => openModal('resource', resource)} onDelete={(id) => handleDelete('resources', id)} />} />
-                        <Route path="/nurturing" element={<NurturingHub nurturingContent={nurturingContent} onEdit={(item) => openModal('nurturing', item)} onDelete={(id) => handleDelete('nurturing', id)} />} />
+                        <Route path="/partners" element={<PartnerList partners={partnersWithDetails} onEdit={(p) => openModal('partner', p)} onDelete={(id) => handleDelete('partners', id)} />} />
+                        <Route path="/deals" element={<DealList deals={filteredDeals} onEdit={(d) => openModal('deal', d)} onDelete={(id) => handleDelete('deals', id)} selectedDeals={selectedDeals} setSelectedDeals={setSelectedDeals} />} />
+                        <Route path="/commissioning" element={<CommissioningList payments={filteredPayments} onImport={(file) => handleImport(file, 'payments')} />} />
+                        <Route path="/resources" element={<ResourceHub resources={resources} onEdit={(r) => openModal('resource', r)} onDelete={(id) => handleDelete('resources', id)} />} />
+                        <Route path="/nurturing" element={<NurturingHub nurturingContent={nurturingContent} onEdit={(i) => openModal('nurturing', i)} onDelete={(id) => handleDelete('nurturing', id)} />} />
                     </Routes>
                 </div>
             </main>
-            {isModalOpen && <Modal closeModal={closeModal} modalType={modalType} handleAdd={handleAdd} handleUpdate={handleUpdate} handleImport={handleImportDeals} partners={partners} initialData={itemToEdit} />}
+            {isModalOpen && <Modal closeModal={closeModal} modalType={modalType} handleAdd={handleAdd} handleUpdate={handleUpdate} handleImport={(file) => handleImport(file, 'payments')} partners={partners} initialData={itemToEdit} />}
             {itemToDelete && <ConfirmationModal onConfirm={confirmDelete} onCancel={() => setItemToDelete(null)} />}
-            {itemsToDelete.length > 0 && <ConfirmationModal onConfirm={confirmBulkDelete} onCancel={() => setItemsToDelete([])} title={`Excluir ${itemsToDelete.length} itens?`} message={`Tem a certeza de que deseja excluir os ${itemsToDelete.length} itens selecionados? Esta ação não pode ser desfeita.`} />}
+            {itemsToDelete.length > 0 && <ConfirmationModal onConfirm={confirmBulkDelete} onCancel={() => setItemsToDelete([])} title={`Excluir ${itemsToDelete.length} itens?`} message={`Tem a certeza de que deseja excluir os ${itemsToDelete.length} itens selecionados?`} />}
         </div>
     );
 }
 
-// --- Componente de Roteamento ---
-// Usar HashRouter pode ajudar em alguns ambientes de hospedagem
-export function Root() {
-    return (
-        <Routes>
-            <Route path="/*" element={<App />} />
-        </Routes>
-    );
-}
-
+export function Root() { return <Routes><Route path="/*" element={<App />} /></Routes>; }
 
 // --- Componentes de UI ---
-
 const Sidebar = () => {
     const location = useLocation();
     const navItems = [
         { path: '/', label: 'Dashboard', icon: LayoutDashboard },
         { path: '/partners', label: 'Parceiros', icon: Users },
         { path: '/deals', label: 'Oportunidades', icon: Briefcase },
+        { path: '/commissioning', label: 'Comissionamento', icon: BadgePercent },
         { path: '/resources', label: 'Recursos', icon: Book },
         { path: '/nurturing', label: 'Nutrição', icon: Lightbulb },
     ];
@@ -455,16 +351,7 @@ const Sidebar = () => {
                  <h1 className="hidden sm:block ml-3 text-xl font-bold">PRM Driva</h1>
             </div>
             <nav className="flex-1 mt-6">
-                <ul>
-                    {navItems.map(item => (
-                        <li key={item.path} className="px-3 sm:px-6 py-1">
-                            <Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname === item.path ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}>
-                                <item.icon className="h-5 w-5" />
-                                <span className="hidden sm:inline ml-4 font-medium">{item.label}</span>
-                            </Link>
-                        </li>
-                    ))}
-                </ul>
+                <ul>{navItems.map(item => (<li key={item.path} className="px-3 sm:px-6 py-1"><Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname === item.path ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}><item.icon className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">{item.label}</span></Link></li>))}</ul>
             </nav>
         </aside>
     );
@@ -473,76 +360,30 @@ const Sidebar = () => {
 const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selectedDealsCount, onBulkDelete }) => {
     const location = useLocation();
     const view = location.pathname;
-
-    const viewTitles = {
-        '/': 'Dashboard de Canais',
-        '/partners': 'Gestão de Parceiros',
-        '/deals': 'Registro de Oportunidades',
-        '/resources': 'Central de Recursos',
-        '/nurturing': 'Nutrição de Parceiros',
-    };
+    const viewTitles = { '/': 'Dashboard de Canais', '/partners': 'Gestão de Parceiros', '/deals': 'Registro de Oportunidades', '/commissioning': 'Cálculo de Comissionamento', '/resources': 'Central de Recursos', '/nurturing': 'Nutrição de Parceiros' };
     const buttonInfo = {
         '/partners': { label: 'Novo Parceiro', action: () => openModal('partner') },
         '/deals': { label: 'Registrar Oportunidade', action: () => openModal('deal') },
         '/resources': { label: 'Novo Recurso', action: () => openModal('resource') },
         '/nurturing': { label: 'Novo Conteúdo', action: () => openModal('nurturing') },
     };
-    
-    const showFilters = ['/', '/partners', '/deals'].includes(view);
-
-    const clearFilters = () => {
-        setStartDate('');
-        setEndDate('');
-    }
-
+    const showFilters = ['/', '/partners', '/deals', '/commissioning'].includes(view);
     return (
         <div>
             <div className="flex flex-wrap justify-between items-center gap-4">
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">{viewTitles[view]}</h1>
                 <div className="flex items-center gap-2">
-                    {view === '/deals' && selectedDealsCount > 0 && (
-                        <button 
-                            onClick={onBulkDelete}
-                            className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700 transition-colors duration-200"
-                        >
-                            <Trash2 className="h-5 w-5 mr-2" />
-                            <span className="font-semibold">Excluir ({selectedDealsCount})</span>
-                        </button>
-                    )}
-                    {view === '/deals' && (
-                         <button 
-                            onClick={() => openModal('importDeals')}
-                            className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50 transition-colors duration-200"
-                        >
-                            <Upload className="h-5 w-5 mr-2" />
-                            <span className="font-semibold">Importar Planilha</span>
-                        </button>
-                    )}
-                    {buttonInfo[view] && (
-                        <button onClick={() => buttonInfo[view].action()} className="flex items-center bg-sky-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-sky-600 transition-colors duration-200">
-                            <Plus className="h-5 w-5 mr-2" />
-                            <span className="font-semibold">{buttonInfo[view].label}</span>
-                        </button>
-                    )}
+                    {view === '/deals' && selectedDealsCount > 0 && (<button onClick={onBulkDelete} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDealsCount})</span></button>)}
+                    {view === '/commissioning' && (<button onClick={() => openModal('importPayments')} className="flex items-center bg-green-500 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-green-600"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Pagamentos</span></button>)}
+                    {buttonInfo[view] && (<button onClick={() => buttonInfo[view].action()} className="flex items-center bg-sky-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-sky-600"><Plus className="h-5 w-5 mr-2" /><span className="font-semibold">{buttonInfo[view].label}</span></button>)}
                 </div>
             </div>
             {showFilters && (
                 <div className="mt-4 bg-white p-4 rounded-lg shadow-sm border flex flex-wrap items-center gap-4">
                     <Filter className="h-5 w-5 text-gray-500" />
-                    <div className="flex items-center gap-2">
-                        <label htmlFor="start-date" className="text-sm font-medium text-gray-700">De:</label>
-                        <input type="date" id="start-date" value={startDate} onChange={e => setStartDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500 text-sm" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <label htmlFor="end-date" className="text-sm font-medium text-gray-700">Até:</label>
-                        <input type="date" id="end-date" value={endDate} onChange={e => setEndDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500 text-sm" />
-                    </div>
-                    {(startDate || endDate) && (
-                         <button onClick={clearFilters} className="flex items-center text-sm text-gray-600 hover:text-red-600">
-                            <XCircle className="h-4 w-4 mr-1" />
-                            Limpar Filtro
-                        </button>
-                    )}
+                    <div className="flex items-center gap-2"><label htmlFor="start-date" className="text-sm font-medium text-gray-700">De:</label><input type="date" id="start-date" value={startDate} onChange={e => setStartDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md shadow-sm" /></div>
+                    <div className="flex items-center gap-2"><label htmlFor="end-date" className="text-sm font-medium text-gray-700">Até:</label><input type="date" id="end-date" value={endDate} onChange={e => setEndDate(e.target.value)} className="px-2 py-1 border border-gray-300 rounded-md shadow-sm" /></div>
+                    {(startDate || endDate) && (<button onClick={() => {setStartDate(''); setEndDate('');}} className="flex items-center text-sm text-gray-600 hover:text-red-600"><XCircle className="h-4 w-4 mr-1" />Limpar Filtro</button>)}
                 </div>
             )}
         </div>
@@ -551,51 +392,17 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
 
 const Dashboard = ({ partners, deals }) => {
     const generalStats = useMemo(() => {
-        const totalRevenue = deals.filter(d => d.status === 'Ganho').reduce((sum, d) => sum + (parseFloat(d.value) || 0), 0);
+        const totalRevenue = partners.reduce((sum, p) => sum + p.revenue, 0);
         return [
             { title: 'Total de Parceiros', value: partners.length, icon: Users, color: 'text-blue-500' },
             { title: 'Oportunidades no Período', value: deals.length, icon: Briefcase, color: 'text-orange-500' },
-            { title: 'Receita no Período', value: `R$ ${totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-green-500' },
+            { title: 'Receita (Pagamentos) no Período', value: `R$ ${totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-green-500' },
         ];
     }, [partners, deals]);
-
-    const typeStats = useMemo(() => {
-        const finderRevenue = partners.filter(p => p.type === 'FINDER').reduce((sum, p) => sum + p.revenue, 0);
-        const sellerRevenue = partners.filter(p => p.type === 'SELLER').reduce((sum, p) => sum + p.revenue, 0);
-        return {
-            finder: { count: partners.filter(p => p.type === 'FINDER').length, revenue: finderRevenue },
-            seller: { count: partners.filter(p => p.type === 'SELLER').length, revenue: sellerRevenue },
-        };
-    }, [partners]);
-
     return (
         <div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {generalStats.map(stat => (
-                    <div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center">
-                        <div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div>
-                        <div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div>
-                    </div>
-                ))}
-            </div>
-
-            <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-md">
-                    <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><Search className="mr-2 text-blue-500"/>Análise: Finders</h2>
-                    <p className="text-lg">Total de Parceiros: <span className="font-bold">{typeStats.finder.count}</span></p>
-                    <p className="text-lg">Receita no Período: <span className="font-bold">R$ {typeStats.finder.revenue.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></p>
-                </div>
-                <div className="bg-white p-6 rounded-xl shadow-md">
-                    <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><Handshake className="mr-2 text-green-500"/>Análise: Sellers</h2>
-                     <p className="text-lg">Total de Parceiros: <span className="font-bold">{typeStats.seller.count}</span></p>
-                    <p className="text-lg">Receita no Período: <span className="font-bold">R$ {typeStats.seller.revenue.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</span></p>
-                </div>
-            </div>
-
-            <div className="mt-8">
-                <h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2>
-                <div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} isMini={true} onEdit={() => {}} onDelete={() => {}} selectedDeals={[]} setSelectedDeals={() => {}}/></div>
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">{generalStats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div>
+            <div className="mt-8"><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div>
         </div>
     );
 };
@@ -607,11 +414,10 @@ const PartnerList = ({ partners, onEdit, onDelete }) => (
                 <tr>
                     <th className="p-4 font-semibold text-slate-600">Nome do Parceiro</th>
                     <th className="p-4 font-semibold text-slate-600">Tipo</th>
-                    <th className="p-4 font-semibold text-slate-600">Nível (no período)</th>
-                    <th className="p-4 font-semibold text-slate-600">Receita Gerada (no período)</th>
-                    <th className="p-4 font-semibold text-slate-600">Oportunidades Geradas (no período)</th>
-                    <th className="p-4 font-semibold text-slate-600">Taxa de Conversão (no período)</th>
-                    <th className="p-4 font-semibold text-slate-600">Comissão</th>
+                    <th className="p-4 font-semibold text-slate-600">Nível</th>
+                    <th className="p-4 font-semibold text-slate-600">Receita (Pagamentos)</th>
+                    <th className="p-4 font-semibold text-slate-600">Taxa de Conversão</th>
+                    <th className="p-4 font-semibold text-slate-600">Comissão a Pagar</th>
                     <th className="p-4 font-semibold text-slate-600">Ações</th>
                 </tr>
             </thead>
@@ -620,15 +426,10 @@ const PartnerList = ({ partners, onEdit, onDelete }) => (
                     <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
                         <td className="p-4 text-slate-800 font-medium">{p.name}</td>
                         <td className="p-4 text-slate-600">{p.type}</td>
-                        <td className="p-4">
-                            <span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center w-fit ${p.tier.bgColor} ${p.tier.color}`}>
-                                <p.tier.icon className="h-4 w-4 mr-2" />{p.tier.name}
-                            </span>
-                        </td>
+                        <td className="p-4"><span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center w-fit ${p.tier.bgColor} ${p.tier.color}`}><p.tier.icon className="h-4 w-4 mr-2" />{p.tier.name}</span></td>
                         <td className="p-4 text-slate-600 font-medium">R$ {p.revenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="p-4 text-slate-600 font-medium">R$ {p.totalOpportunitiesValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                         <td className="p-4 text-slate-600 font-bold">{p.conversionRate.toFixed(1)}%</td>
-                        <td className="p-4 text-slate-600 font-bold">{p.tier.commissionRate}%</td>
+                        <td className="p-4 text-green-600 font-bold">R$ {p.commissionToPay.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                         <td className="p-4 relative"><ActionsMenu onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} /></td>
                     </tr>
                 ))}
@@ -640,23 +441,8 @@ const PartnerList = ({ partners, onEdit, onDelete }) => (
 
 const DealList = ({ deals, onEdit, onDelete, selectedDeals, setSelectedDeals, isMini = false }) => {
     const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
-    
-    const handleSelectAll = (e) => {
-        if (e.target.checked) {
-            setSelectedDeals(deals.map(d => d.id));
-        } else {
-            setSelectedDeals([]);
-        }
-    };
-
-    const handleSelectOne = (e, id) => {
-        if (e.target.checked) {
-            setSelectedDeals([...selectedDeals, id]);
-        } else {
-            setSelectedDeals(selectedDeals.filter(dealId => dealId !== id));
-        }
-    };
-
+    const handleSelectAll = (e) => setSelectedDeals(e.target.checked ? deals.map(d => d.id) : []);
+    const handleSelectOne = (e, id) => setSelectedDeals(e.target.checked ? [...selectedDeals, id] : selectedDeals.filter(dealId => dealId !== id));
     return (
         <div className={!isMini ? "bg-white rounded-xl shadow-md" : ""}>
             <table className="w-full text-left">
@@ -672,360 +458,129 @@ const DealList = ({ deals, onEdit, onDelete, selectedDeals, setSelectedDeals, is
                     </tr>
                 </thead>
                 <tbody>
-                    {deals.map(d => (
-                        <tr key={d.id} className={`border-b border-slate-100 ${selectedDeals.includes(d.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
-                            {!isMini && <td className="p-4"><input type="checkbox" checked={selectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
-                            {!isMini && <td className="p-4 text-slate-600">{d.submissionDate ? d.submissionDate.toDate().toLocaleDateString('pt-BR') : 'N/A'}</td>}
-                            <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
-                            <td className="p-4 text-slate-600">{d.partnerName}</td>
-                            <td className="p-4 text-slate-600">R$ {parseFloat(d.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                            <td className="p-4"><span className={`px-2 py-1 rounded-full text-sm font-semibold ${statusColors[d.status] || 'bg-gray-100 text-gray-800'}`}>{d.status}</span></td>
-                            {!isMini && <td className="p-4 relative"><ActionsMenu onEdit={() => onEdit(d)} onDelete={() => onDelete(d.id)} /></td>}
-                        </tr>
-                    ))}
+                    {deals.map(d => (<tr key={d.id} className={`border-b border-slate-100 ${selectedDeals.includes(d.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
+                        {!isMini && <td className="p-4"><input type="checkbox" checked={selectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
+                        {!isMini && <td className="p-4 text-slate-600">{d.submissionDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td>}
+                        <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
+                        <td className="p-4 text-slate-600">{d.partnerName}</td>
+                        <td className="p-4 text-slate-600">R$ {parseFloat(d.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="p-4"><span className={`px-2 py-1 rounded-full text-sm font-semibold ${statusColors[d.status] || 'bg-gray-100'}`}>{d.status}</span></td>
+                        {!isMini && <td className="p-4 relative"><ActionsMenu onEdit={() => onEdit(d)} onDelete={() => onDelete(d.id)} /></td>}
+                    </tr>))}
                 </tbody>
             </table>
-            {deals.length === 0 && <p className="p-4 text-center text-gray-500">Nenhuma oportunidade encontrada para o período selecionado.</p>}
+            {deals.length === 0 && <p className="p-4 text-center text-gray-500">Nenhuma oportunidade encontrada.</p>}
         </div>
     );
 };
 
-const ResourceHub = ({ resources, onEdit, onDelete }) => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {resources.map(r => (
-            <div key={r.id} className="bg-white p-6 rounded-xl shadow-md flex flex-col relative">
-                <div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(r)} onDelete={() => onDelete(r.id)} /></div>
-                <h3 className="text-lg font-bold text-slate-800 pr-8">{r.title}</h3>
-                <p className="text-slate-600 mt-2 flex-grow">{r.description}</p>
-                <div className="mt-4 flex justify-between items-center">
-                    <span className="text-sm font-semibold bg-sky-100 text-sky-800 px-2 py-1 rounded-full">{r.category}</span>
-                    <a href={r.url} target="_blank" rel="noopener noreferrer" className="font-bold text-sky-500 hover:text-sky-600">Aceder</a>
-                </div>
-            </div>
-        ))}
-        {resources.length === 0 && <p className="p-4 text-center text-gray-500 col-span-full">Nenhum recurso disponível.</p>}
+const CommissioningList = ({ payments }) => (
+    <div className="bg-white rounded-xl shadow-md">
+        <table className="w-full text-left">
+            <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                    <th className="p-4 font-semibold text-slate-600">Data do Pagamento</th>
+                    <th className="p-4 font-semibold text-slate-600">Cliente Final</th>
+                    <th className="p-4 font-semibold text-slate-600">Parceiro</th>
+                    <th className="p-4 font-semibold text-slate-600">Valor Pago</th>
+                </tr>
+            </thead>
+            <tbody>
+                {payments.map(p => (
+                    <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="p-4 text-slate-600">{p.paymentDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td>
+                        <td className="p-4 text-slate-800 font-medium">{p.clientName}</td>
+                        <td className="p-4 text-slate-600">{p.partnerName}</td>
+                        <td className="p-4 text-slate-600 font-medium">R$ {p.paymentValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+        {payments.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum pagamento encontrado para o período.</p>}
     </div>
 );
 
-const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => (
-    <div className="space-y-6">
-        {nurturingContent.map(item => (
-            <div key={item.id} className="bg-white p-6 rounded-xl shadow-md relative">
-                 <div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(item)} onDelete={() => onDelete(item.id)} /></div>
-                <h3 className="text-lg font-bold text-slate-800 pr-8">{item.title}</h3>
-                <p className="text-sm text-gray-500 mt-1">{item.createdAt ? new Date(item.createdAt.toDate()).toLocaleDateString('pt-BR') : ''}</p>
-                <p className="text-slate-600 mt-4 whitespace-pre-wrap">{item.content}</p>
-            </div>
-        ))}
-        {nurturingContent.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum conteúdo de nutrição publicado.</p>}
-    </div>
-);
+
+const ResourceHub = ({ resources, onEdit, onDelete }) => ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{resources.map(r => (<div key={r.id} className="bg-white p-6 rounded-xl shadow-md flex flex-col relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(r)} onDelete={() => onDelete(r.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{r.title}</h3><p className="text-slate-600 mt-2 flex-grow">{r.description}</p><div className="mt-4 flex justify-between items-center"><span className="text-sm font-semibold bg-sky-100 text-sky-800 px-2 py-1 rounded-full">{r.category}</span><a href={r.url} target="_blank" rel="noopener noreferrer" className="font-bold text-sky-500 hover:text-sky-600">Aceder</a></div></div>))}{resources.length === 0 && <p className="p-4 text-center text-gray-500 col-span-full">Nenhum recurso disponível.</p>}</div>);
+const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => ( <div className="space-y-6">{nurturingContent.map(item => (<div key={item.id} className="bg-white p-6 rounded-xl shadow-md relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(item)} onDelete={() => onDelete(item.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{item.title}</h3><p className="text-sm text-gray-500 mt-1">{item.createdAt?.toDate().toLocaleDateString('pt-BR') || ''}</p><p className="text-slate-600 mt-4 whitespace-pre-wrap">{item.content}</p></div>))}{nurturingContent.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum conteúdo de nutrição publicado.</p>}</div>);
 
 // --- Componentes Genéricos ---
-
 const ActionsMenu = ({ onEdit, onDelete }) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef(null);
-
     useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (menuRef.current && !menuRef.current.contains(event.target)) {
-                setIsOpen(false);
-            }
-        };
+        const handleClickOutside = (event) => { if (menuRef.current && !menuRef.current.contains(event.target)) setIsOpen(false); };
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
-
-    return (
-        <div className="relative" ref={menuRef}>
-            <button onClick={() => setIsOpen(!isOpen)} className="p-2 rounded-full hover:bg-gray-200">
-                <MoreVertical size={18} />
-            </button>
-            {isOpen && (
-                <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 border">
-                    <button onClick={() => { onEdit(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center">
-                        <Edit size={16} className="mr-2" /> Editar
-                    </button>
-                    <button onClick={() => { onDelete(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center">
-                        <Trash2 size={16} className="mr-2" /> Excluir
-                    </button>
-                </div>
-            )}
-        </div>
-    );
+    return (<div className="relative" ref={menuRef}><button onClick={() => setIsOpen(!isOpen)} className="p-2 rounded-full hover:bg-gray-200"><MoreVertical size={18} /></button>{isOpen && (<div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 border"><button onClick={() => { onEdit(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"><Edit size={16} className="mr-2" /> Editar</button><button onClick={() => { onDelete(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"><Trash2 size={16} className="mr-2" /> Excluir</button></div>)}</div>);
 };
-
-const ConfirmationModal = ({ onConfirm, onCancel, title = "Confirmar Exclusão", message = "Tem a certeza de que deseja excluir este item? Esta ação não pode ser desfeita." }) => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center">
-            <div className="mx-auto bg-red-100 rounded-full h-12 w-12 flex items-center justify-center">
-                <AlertTriangle className="h-6 w-6 text-red-600" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mt-4">{title}</h3>
-            <p className="text-sm text-gray-500 mt-2">{message}</p>
-            <div className="mt-6 flex justify-center gap-4">
-                <button onClick={onCancel} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-semibold">Cancelar</button>
-                <button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold">Confirmar Exclusão</button>
-            </div>
-        </div>
-    </div>
-);
-
+const ConfirmationModal = ({ onConfirm, onCancel, title = "Confirmar Exclusão", message = "Tem a certeza de que deseja excluir este item? Esta ação não pode ser desfeita." }) => (<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center"><div className="mx-auto bg-red-100 rounded-full h-12 w-12 flex items-center justify-center"><AlertTriangle className="h-6 w-6 text-red-600" /></div><h3 className="text-lg font-medium text-gray-900 mt-4">{title}</h3><p className="text-sm text-gray-500 mt-2">{message}</p><div className="mt-6 flex justify-center gap-4"><button onClick={onCancel} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-semibold">Cancelar</button><button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold">Confirmar Exclusão</button></div></div></div>);
 
 const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, partners, initialData }) => {
     const isEditMode = !!initialData;
-
     const renderForm = () => {
         switch (modalType) {
             case 'partner': return <PartnerForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'deal': return <DealForm onSubmit={isEditMode ? handleUpdate : handleAdd} partners={partners} initialData={initialData} />;
             case 'resource': return <ResourceForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'nurturing': return <NurturingForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
-            case 'importDeals': return <ImportDealsForm onSubmit={handleImport} closeModal={closeModal} partners={partners} />;
+            case 'importPayments': return <ImportPaymentsForm onSubmit={handleImport} closeModal={closeModal} />;
             default: return null;
         }
     };
-    const titles = { 
-        partner: isEditMode ? 'Editar Parceiro' : 'Adicionar Novo Parceiro', 
-        deal: isEditMode ? 'Editar Oportunidade' : 'Registrar Nova Oportunidade', 
-        resource: isEditMode ? 'Editar Recurso' : 'Adicionar Novo Recurso', 
-        nurturing: isEditMode ? 'Editar Conteúdo' : 'Adicionar Conteúdo de Nutrição',
-        importDeals: 'Importar Oportunidades de Planilha'
-    };
-    return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
-                <div className="flex justify-between items-center p-4 border-b">
-                    <h2 className="text-xl font-bold text-slate-800">{titles[modalType]}</h2>
-                    <button onClick={closeModal} className="text-gray-400 hover:text-gray-600"><X className="h-6 w-6" /></button>
-                </div>
-                <div className="p-6">{renderForm()}</div>
-            </div>
-        </div>
-    );
+    const titles = { partner: isEditMode ? 'Editar Parceiro' : 'Adicionar Parceiro', deal: isEditMode ? 'Editar Oportunidade' : 'Registrar Oportunidade', resource: isEditMode ? 'Editar Recurso' : 'Adicionar Recurso', nurturing: isEditMode ? 'Editar Conteúdo' : 'Adicionar Conteúdo', importPayments: 'Importar Planilha de Pagamentos' };
+    return (<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-lg"><div className="flex justify-between items-center p-4 border-b"><h2 className="text-xl font-bold text-slate-800">{titles[modalType]}</h2><button onClick={closeModal} className="text-gray-400 hover:text-gray-600"><X className="h-6 w-6" /></button></div><div className="p-6">{renderForm()}</div></div></div>);
 };
 
 // --- Formulários ---
-const FormInput = ({ id, label, ...props }) => (<div><label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label><input id={id} {...props} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500" /></div>);
-const FormSelect = ({ id, label, children, ...props }) => (<div><label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label><select id={id} {...props} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500">{children}</select></div>);
-const FormTextarea = ({ id, label, ...props }) => (<div><label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label><textarea id={id} {...props} rows="4" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500" /></div>);
+const FormInput = ({ id, label, ...props }) => (<div><label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label><input id={id} {...props} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" /></div>);
+const FormSelect = ({ id, label, children, ...props }) => (<div><label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label><select id={id} {...props} className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm">{children}</select></div>);
+const FormTextarea = ({ id, label, ...props }) => (<div><label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label><textarea id={id} {...props} rows="4" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm" /></div>);
 const FormButton = ({ children, ...props }) => (<button type="submit" {...props} className="w-full bg-sky-500 text-white py-2 px-4 rounded-md hover:bg-sky-600 font-semibold transition-colors duration-200 disabled:bg-sky-300">{children}</button>);
 
 const PartnerForm = ({ onSubmit, initialData }) => {
-    const [formData, setFormData] = useState({
-        name: initialData?.name || '',
-        type: initialData?.type || 'FINDER',
-        contactName: initialData?.contactName || '',
-        contactEmail: initialData?.contactEmail || '',
-    });
-
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        if (initialData) {
-            onSubmit('partners', initialData.id, formData);
-        } else {
-            onSubmit('partners', formData);
-        }
-    };
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <FormInput id="name" name="name" label="Nome do Parceiro" value={formData.name} onChange={handleChange} required />
-            <FormSelect id="type" name="type" label="Tipo de Parceiro" value={formData.type} onChange={handleChange} required>
-                <option value="FINDER">Finder</option>
-                <option value="SELLER">Seller</option>
-            </FormSelect>
-            <FormInput id="contactName" name="contactName" label="Nome do Contato" value={formData.contactName} onChange={handleChange} required />
-            <FormInput id="contactEmail" name="contactEmail" label="Email do Contato" type="email" value={formData.contactEmail} onChange={handleChange} required />
-            <FormButton>{initialData ? 'Salvar Alterações' : 'Salvar Parceiro'}</FormButton>
-        </form>
-    );
+    const [formData, setFormData] = useState({ name: initialData?.name || '', type: initialData?.type || 'FINDER', contactName: initialData?.contactName || '', contactEmail: initialData?.contactEmail || '' });
+    const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleSubmit = (e) => { e.preventDefault(); if (initialData) onSubmit('partners', initialData.id, formData); else onSubmit('partners', formData); };
+    return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="name" name="name" label="Nome do Parceiro" value={formData.name} onChange={handleChange} required /><FormSelect id="type" name="type" label="Tipo de Parceiro" value={formData.type} onChange={handleChange} required><option value="FINDER">Finder</option><option value="SELLER">Seller</option></FormSelect><FormInput id="contactName" name="contactName" label="Nome do Contato" value={formData.contactName} onChange={handleChange} required /><FormInput id="contactEmail" name="contactEmail" label="Email do Contato" type="email" value={formData.contactEmail} onChange={handleChange} required /><FormButton>{initialData ? 'Salvar Alterações' : 'Salvar Parceiro'}</FormButton></form>);
 };
 
 const DealForm = ({ onSubmit, partners, initialData }) => {
-    const [formData, setFormData] = useState({
-        clientName: initialData?.clientName || '',
-        partnerId: initialData?.partnerId || '',
-        submissionDate: initialData?.submissionDate?.toDate().toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
-        value: initialData?.value || '',
-        status: initialData?.status || 'Pendente',
-    });
-
-     const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        const selectedPartner = partners.find(p => p.id === formData.partnerId);
-        const dataToSubmit = { ...formData, partnerName: selectedPartner ? selectedPartner.name : 'N/A' };
-        
-        if (initialData) {
-            onSubmit('deals', initialData.id, dataToSubmit);
-        } else {
-            onSubmit('deals', dataToSubmit);
-        }
-    };
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <FormInput id="clientName" name="clientName" label="Nome do Cliente Final" value={formData.clientName} onChange={handleChange} required />
-            <FormSelect id="partnerId" name="partnerId" label="Parceiro Responsável" value={formData.partnerId} onChange={handleChange} required>
-                <option value="">Selecione um parceiro</option>
-                {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </FormSelect>
-             <FormInput id="submissionDate" name="submissionDate" label="Data da Indicação" type="date" value={formData.submissionDate} onChange={handleChange} required />
-            <FormInput id="value" name="value" label="Valor Estimado (R$)" type="number" step="0.01" value={formData.value} onChange={handleChange} required />
-            <FormSelect id="status" name="status" label="Status" value={formData.status} onChange={handleChange} required>
-                <option>Pendente</option>
-                <option>Aprovado</option>
-                <option>Ganho</option>
-                <option>Perdido</option>
-            </FormSelect>
-            <FormButton>{initialData ? 'Salvar Alterações' : 'Registrar Oportunidade'}</FormButton>
-        </form>
-    );
+    const [formData, setFormData] = useState({ clientName: initialData?.clientName || '', partnerId: initialData?.partnerId || '', submissionDate: initialData?.submissionDate?.toDate().toISOString().split('T')[0] || new Date().toISOString().split('T')[0], value: initialData?.value || '', status: initialData?.status || 'Pendente' });
+    const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleSubmit = (e) => { e.preventDefault(); const selectedPartner = partners.find(p => p.id === formData.partnerId); const dataToSubmit = { ...formData, partnerName: selectedPartner ? selectedPartner.name : 'N/A' }; if (initialData) onSubmit('deals', initialData.id, dataToSubmit); else onSubmit('deals', dataToSubmit); };
+    return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="clientName" name="clientName" label="Nome do Cliente Final" value={formData.clientName} onChange={handleChange} required /><FormSelect id="partnerId" name="partnerId" label="Parceiro Responsável" value={formData.partnerId} onChange={handleChange} required><option value="">Selecione um parceiro</option>{partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</FormSelect><FormInput id="submissionDate" name="submissionDate" label="Data da Indicação" type="date" value={formData.submissionDate} onChange={handleChange} required /><FormInput id="value" name="value" label="Valor Estimado (R$)" type="number" step="0.01" value={formData.value} onChange={handleChange} required /><FormSelect id="status" name="status" label="Status" value={formData.status} onChange={handleChange} required><option>Pendente</option><option>Aprovado</option><option>Ganho</option><option>Perdido</option></FormSelect><FormButton>{initialData ? 'Salvar Alterações' : 'Registrar Oportunidade'}</FormButton></form>);
 };
 
 const ResourceForm = ({ onSubmit, initialData }) => {
-     const [formData, setFormData] = useState({
-        title: initialData?.title || '',
-        description: initialData?.description || '',
-        url: initialData?.url || '',
-        category: initialData?.category || 'Marketing',
-    });
-
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        if (initialData) {
-            onSubmit('resources', initialData.id, formData);
-        } else {
-            onSubmit('resources', formData);
-        }
-    };
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <FormInput id="title" name="title" label="Título do Recurso" value={formData.title} onChange={handleChange} required />
-            <FormTextarea id="description" name="description" label="Descrição" value={formData.description} onChange={handleChange} required />
-            <FormInput id="url" name="url" label="URL do Recurso" type="url" value={formData.url} onChange={handleChange} required />
-            <FormSelect id="category" name="category" label="Categoria" value={formData.category} onChange={handleChange} required>
-                <option>Marketing</option><option>Vendas</option><option>Técnico</option><option>Legal</option>
-            </FormSelect>
-            <FormButton>{initialData ? 'Salvar Alterações' : 'Salvar Recurso'}</FormButton>
-        </form>
-    );
+    const [formData, setFormData] = useState({ title: initialData?.title || '', description: initialData?.description || '', url: initialData?.url || '', category: initialData?.category || 'Marketing' });
+    const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleSubmit = (e) => { e.preventDefault(); if (initialData) onSubmit('resources', initialData.id, formData); else onSubmit('resources', formData); };
+    return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="title" name="title" label="Título do Recurso" value={formData.title} onChange={handleChange} required /><FormTextarea id="description" name="description" label="Descrição" value={formData.description} onChange={handleChange} required /><FormInput id="url" name="url" label="URL do Recurso" type="url" value={formData.url} onChange={handleChange} required /><FormSelect id="category" name="category" label="Categoria" value={formData.category} onChange={handleChange} required><option>Marketing</option><option>Vendas</option><option>Técnico</option><option>Legal</option></FormSelect><FormButton>{initialData ? 'Salvar Alterações' : 'Salvar Recurso'}</FormButton></form>);
 };
 
 const NurturingForm = ({ onSubmit, initialData }) => {
-    const [formData, setFormData] = useState({
-        title: initialData?.title || '',
-        content: initialData?.content || '',
-    });
-
-    const handleChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-    };
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        if (initialData) {
-            onSubmit('nurturing', initialData.id, formData);
-        } else {
-            onSubmit('nurturing', formData);
-        }
-    };
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <FormInput id="title" name="title" label="Título do Conteúdo" value={formData.title} onChange={handleChange} required />
-            <FormTextarea id="content" name="content" label="Conteúdo/Direcionamento" value={formData.content} onChange={handleChange} required />
-            <FormButton>{initialData ? 'Salvar Alterações' : 'Publicar Conteúdo'}</FormButton>
-        </form>
-    );
+    const [formData, setFormData] = useState({ title: initialData?.title || '', content: initialData?.content || '' });
+    const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleSubmit = (e) => { e.preventDefault(); if (initialData) onSubmit('nurturing', initialData.id, formData); else onSubmit('nurturing', formData); };
+    return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="title" name="title" label="Título do Conteúdo" value={formData.title} onChange={handleChange} required /><FormTextarea id="content" name="content" label="Conteúdo/Direcionamento" value={formData.content} onChange={handleChange} required /><FormButton>{initialData ? 'Salvar Alterações' : 'Publicar Conteúdo'}</FormButton></form>);
 };
 
-const ImportDealsForm = ({ onSubmit, closeModal, partners }) => {
+const ImportPaymentsForm = ({ onSubmit, closeModal }) => {
     const [file, setFile] = useState(null);
-    const [selectedPartnerId, setSelectedPartnerId] = useState('');
     const [isImporting, setIsImporting] = useState(false);
     const [importStatus, setImportStatus] = useState('');
-
-    const handleFileChange = (e) => {
-        setImportStatus('');
-        if (e.target.files.length > 0) {
-            setFile(e.target.files[0]);
-        }
-    };
-
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!file || !selectedPartnerId) {
-            setImportStatus('Por favor, selecione um parceiro e um arquivo .csv');
-            return;
-        }
-        setIsImporting(true);
-        setImportStatus('Importando...');
+        if (!file) { setImportStatus('Por favor, selecione um arquivo .csv'); return; }
+        setIsImporting(true); setImportStatus('Importando...');
         try {
-            const { successfulImports, failedImports } = await onSubmit(file, selectedPartnerId);
-            setImportStatus(`${successfulImports} oportunidades importadas com sucesso. ${failedImports} falharam.`);
-            setTimeout(() => {
-                closeModal();
-            }, 3000);
-        } catch (error) {
-            setImportStatus('Ocorreu um erro durante a importação.');
-            console.error(error);
-        } finally {
-            setIsImporting(false);
-        }
+            const { successfulImports, failedImports } = await onSubmit(file);
+            setImportStatus(`${successfulImports} pagamentos importados. ${failedImports} falharam.`);
+            setTimeout(() => closeModal(), 3000);
+        } catch (error) { setImportStatus('Ocorreu um erro durante a importação.'); console.error(error); } 
+        finally { setIsImporting(false); }
     };
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <FormSelect 
-                id="partner-select" 
-                label="Atribuir oportunidades para o parceiro:"
-                value={selectedPartnerId}
-                onChange={(e) => setSelectedPartnerId(e.target.value)}
-                required
-            >
-                <option value="">Selecione um parceiro</option>
-                {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </FormSelect>
-            
-            <div>
-                <label htmlFor="csv-upload" className="block text-sm font-medium text-gray-700 mb-2">
-                    Selecione um arquivo .csv
-                </label>
-                <p className="text-xs text-gray-500 mb-2">
-                    A planilha deve conter as colunas: <code className="bg-gray-100 p-1 rounded">clientName</code>, <code className="bg-gray-100 p-1 rounded">value</code>, <code className="bg-gray-100 p-1 rounded">status</code>, e <code className="bg-gray-100 p-1 rounded">submissionDate</code> (formato AAAA-MM-DD HH:mm). A hora será desconsiderada.
-                </p>
-                <input 
-                    id="csv-upload" 
-                    name="csv-upload" 
-                    type="file" 
-                    accept=".csv"
-                    onChange={handleFileChange}
-                    className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100"
-                />
-            </div>
-            {importStatus && <p className="text-sm text-center font-medium text-gray-600">{importStatus}</p>}
-            <FormButton disabled={isImporting || !file || !selectedPartnerId}>
-                {isImporting ? 'Importando...' : 'Iniciar Importação'}
-            </FormButton>
-        </form>
-    );
+    return (<form onSubmit={handleSubmit} className="space-y-4"><div><label htmlFor="csv-upload" className="block text-sm font-medium text-gray-700 mb-2">Selecione um arquivo .csv</label><p className="text-xs text-gray-500 mb-2">A planilha deve conter: <code className="bg-gray-100 p-1 rounded">clientName</code>, <code className="bg-gray-100 p-1 rounded">partnerName</code>, <code className="bg-gray-100 p-1 rounded">paymentValue</code>, e <code className="bg-gray-100 p-1 rounded">paymentDate</code> (AAAA-MM-DD).</p><input id="csv-upload" type="file" accept=".csv" onChange={(e) => setFile(e.target.files[0])} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100"/></div>{importStatus && <p className="text-sm text-center font-medium text-gray-600">{importStatus}</p>}<FormButton disabled={isImporting || !file}>{isImporting ? 'Importando...' : 'Iniciar Importação'}</FormButton></form>);
 };
