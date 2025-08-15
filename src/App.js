@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -15,7 +15,9 @@ import {
     query,
     serverTimestamp,
     writeBatch,
-    Timestamp
+    Timestamp,
+    updateDoc,
+    deleteDoc
 } from 'firebase/firestore';
 import { 
     Users, 
@@ -34,7 +36,11 @@ import {
     Lightbulb,
     Upload,
     Filter,
-    XCircle
+    XCircle,
+    MoreVertical,
+    Edit,
+    Trash2,
+    AlertTriangle
 } from 'lucide-react';
 
 // --- Configuração do Firebase ---
@@ -87,6 +93,8 @@ export default function App() {
     const [nurturingContent, setNurturingContent] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalType, setModalType] = useState('');
+    const [itemToEdit, setItemToEdit] = useState(null);
+    const [itemToDelete, setItemToDelete] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -211,9 +219,17 @@ export default function App() {
         });
     }, [partners, filteredDeals]);
 
-    // --- Funções Auxiliares ---
-    const openModal = (type) => { setModalType(type); setIsModalOpen(true); };
-    const closeModal = () => { setIsModalOpen(false); setModalType(''); };
+    // --- Funções de CRUD ---
+    const openModal = (type, data = null) => { 
+        setModalType(type); 
+        setItemToEdit(data);
+        setIsModalOpen(true); 
+    };
+    const closeModal = () => { 
+        setIsModalOpen(false); 
+        setModalType('');
+        setItemToEdit(null);
+    };
     
     const handleAdd = async (collectionName, data) => {
         if (!db) return;
@@ -239,6 +255,36 @@ export default function App() {
             closeModal();
         } catch (error) {
             console.error("Erro ao adicionar documento: ", error);
+        }
+    };
+
+    const handleUpdate = async (collectionName, id, data) => {
+        if (!db) return;
+        try {
+            const docRef = doc(db, `artifacts/${appId}/public/data/${collectionName}`, id);
+            const dataToUpdate = {...data};
+            if (collectionName === 'deals' && data.submissionDate) {
+                 dataToUpdate.submissionDate = Timestamp.fromDate(new Date(data.submissionDate));
+            }
+            await updateDoc(docRef, dataToUpdate);
+            closeModal();
+        } catch (error) {
+            console.error("Erro ao atualizar documento: ", error);
+        }
+    };
+
+    const handleDelete = (collectionName, id) => {
+        setItemToDelete({ collectionName, id });
+    };
+
+    const confirmDelete = async () => {
+        if (!db || !itemToDelete) return;
+        try {
+            const { collectionName, id } = itemToDelete;
+            await deleteDoc(doc(db, `artifacts/${appId}/public/data/${collectionName}`, id));
+            setItemToDelete(null);
+        } catch (error) {
+            console.error("Erro ao excluir documento: ", error);
         }
     };
     
@@ -339,14 +385,15 @@ export default function App() {
                 <div className="mt-6">
                     <Routes>
                         <Route path="/" element={<Dashboard partners={partnersWithDetails} deals={filteredDeals} />} />
-                        <Route path="/partners" element={<PartnerList partners={partnersWithDetails} />} />
-                        <Route path="/deals" element={<DealList deals={filteredDeals} />} />
-                        <Route path="/resources" element={<ResourceHub resources={resources} />} />
-                        <Route path="/nurturing" element={<NurturingHub nurturingContent={nurturingContent} />} />
+                        <Route path="/partners" element={<PartnerList partners={partnersWithDetails} onEdit={(partner) => openModal('partner', partner)} onDelete={(id) => handleDelete('partners', id)} />} />
+                        <Route path="/deals" element={<DealList deals={filteredDeals} onEdit={(deal) => openModal('deal', deal)} onDelete={(id) => handleDelete('deals', id)} />} />
+                        <Route path="/resources" element={<ResourceHub resources={resources} onEdit={(resource) => openModal('resource', resource)} onDelete={(id) => handleDelete('resources', id)} />} />
+                        <Route path="/nurturing" element={<NurturingHub nurturingContent={nurturingContent} onEdit={(item) => openModal('nurturing', item)} onDelete={(id) => handleDelete('nurturing', id)} />} />
                     </Routes>
                 </div>
             </main>
-            {isModalOpen && <Modal closeModal={closeModal} modalType={modalType} handleAdd={handleAdd} handleImport={handleImportDeals} partners={partners} />}
+            {isModalOpen && <Modal closeModal={closeModal} modalType={modalType} handleAdd={handleAdd} handleUpdate={handleUpdate} handleImport={handleImportDeals} partners={partners} initialData={itemToEdit} />}
+            {itemToDelete && <ConfirmationModal onConfirm={confirmDelete} onCancel={() => setItemToDelete(null)} />}
         </div>
     );
 }
@@ -424,7 +471,7 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate }) => 
                         </button>
                     )}
                     {buttonInfo[view] && (
-                        <button onClick={buttonInfo[view].action} className="flex items-center bg-sky-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-sky-600 transition-colors duration-200">
+                        <button onClick={() => buttonInfo[view].action()} className="flex items-center bg-sky-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-sky-600 transition-colors duration-200">
                             <Plus className="h-5 w-5 mr-2" />
                             <span className="font-semibold">{buttonInfo[view].label}</span>
                         </button>
@@ -499,24 +546,25 @@ const Dashboard = ({ partners, deals }) => {
 
             <div className="mt-8">
                 <h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2>
-                <div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} isMini={true} /></div>
+                <div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} isMini={true} onEdit={() => {}} onDelete={() => {}} /></div>
             </div>
         </div>
     );
 };
 
-const PartnerList = ({ partners }) => (
+const PartnerList = ({ partners, onEdit, onDelete }) => (
     <div className="bg-white rounded-xl shadow-md overflow-hidden">
         <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                     <th className="p-4 font-semibold text-slate-600">Nome do Parceiro</th>
                     <th className="p-4 font-semibold text-slate-600">Tipo</th>
-                    <th className="p-4 font-semibold text-slate-600">Nível (no período)</th>
-                    <th className="p-4 font-semibold text-slate-600">Receita Gerada (no período)</th>
-                    <th className="p-4 font-semibold text-slate-600">Oportunidades Geradas (no período)</th>
-                    <th className="p-4 font-semibold text-slate-600">Taxa de Conversão (no período)</th>
+                    <th className="p-4 font-semibold text-slate-600">Nível</th>
+                    <th className="p-4 font-semibold text-slate-600">Receita Gerada</th>
+                    <th className="p-4 font-semibold text-slate-600">Oportunidades Geradas</th>
+                    <th className="p-4 font-semibold text-slate-600">Taxa de Conversão</th>
                     <th className="p-4 font-semibold text-slate-600">Comissão</th>
+                    <th className="p-4 font-semibold text-slate-600">Ações</th>
                 </tr>
             </thead>
             <tbody>
@@ -533,6 +581,7 @@ const PartnerList = ({ partners }) => (
                         <td className="p-4 text-slate-600 font-medium">R$ {p.totalOpportunitiesValue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                         <td className="p-4 text-slate-600 font-bold">{p.conversionRate.toFixed(1)}%</td>
                         <td className="p-4 text-slate-600 font-bold">{p.tier.commissionRate}%</td>
+                        <td className="p-4"><ActionsMenu onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} /></td>
                     </tr>
                 ))}
             </tbody>
@@ -541,28 +590,30 @@ const PartnerList = ({ partners }) => (
     </div>
 );
 
-const DealList = ({ deals, isMini = false }) => {
+const DealList = ({ deals, onEdit, onDelete, isMini = false }) => {
     const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
     return (
         <div className={!isMini ? "bg-white rounded-xl shadow-md overflow-hidden" : ""}>
             <table className="w-full text-left">
                 <thead className={!isMini ? "bg-slate-50 border-b border-slate-200" : ""}>
                     <tr>
-                        <th className="p-4 font-semibold text-slate-600">Data</th>
+                        {!isMini && <th className="p-4 font-semibold text-slate-600">Data</th>}
                         <th className="p-4 font-semibold text-slate-600">Cliente Final</th>
                         <th className="p-4 font-semibold text-slate-600">Parceiro</th>
                         <th className="p-4 font-semibold text-slate-600">Valor</th>
                         <th className="p-4 font-semibold text-slate-600">Status</th>
+                        {!isMini && <th className="p-4 font-semibold text-slate-600">Ações</th>}
                     </tr>
                 </thead>
                 <tbody>
                     {deals.map(d => (
                         <tr key={d.id} className="border-b border-slate-100 hover:bg-slate-50">
-                            <td className="p-4 text-slate-600">{d.submissionDate ? d.submissionDate.toDate().toLocaleDateString('pt-BR') : 'N/A'}</td>
+                            {!isMini && <td className="p-4 text-slate-600">{d.submissionDate ? d.submissionDate.toDate().toLocaleDateString('pt-BR') : 'N/A'}</td>}
                             <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
                             <td className="p-4 text-slate-600">{d.partnerName}</td>
                             <td className="p-4 text-slate-600">R$ {parseFloat(d.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
                             <td className="p-4"><span className={`px-2 py-1 rounded-full text-sm font-semibold ${statusColors[d.status] || 'bg-gray-100 text-gray-800'}`}>{d.status}</span></td>
+                            {!isMini && <td className="p-4"><ActionsMenu onEdit={() => onEdit(d)} onDelete={() => onDelete(d.id)} /></td>}
                         </tr>
                     ))}
                 </tbody>
@@ -572,11 +623,12 @@ const DealList = ({ deals, isMini = false }) => {
     );
 };
 
-const ResourceHub = ({ resources }) => (
+const ResourceHub = ({ resources, onEdit, onDelete }) => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {resources.map(r => (
-            <div key={r.id} className="bg-white p-6 rounded-xl shadow-md flex flex-col">
-                <h3 className="text-lg font-bold text-slate-800">{r.title}</h3>
+            <div key={r.id} className="bg-white p-6 rounded-xl shadow-md flex flex-col relative">
+                <div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(r)} onDelete={() => onDelete(r.id)} /></div>
+                <h3 className="text-lg font-bold text-slate-800 pr-8">{r.title}</h3>
                 <p className="text-slate-600 mt-2 flex-grow">{r.description}</p>
                 <div className="mt-4 flex justify-between items-center">
                     <span className="text-sm font-semibold bg-sky-100 text-sky-800 px-2 py-1 rounded-full">{r.category}</span>
@@ -588,11 +640,12 @@ const ResourceHub = ({ resources }) => (
     </div>
 );
 
-const NurturingHub = ({ nurturingContent }) => (
+const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => (
     <div className="space-y-6">
         {nurturingContent.map(item => (
-            <div key={item.id} className="bg-white p-6 rounded-xl shadow-md">
-                <h3 className="text-lg font-bold text-slate-800">{item.title}</h3>
+            <div key={item.id} className="bg-white p-6 rounded-xl shadow-md relative">
+                 <div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(item)} onDelete={() => onDelete(item.id)} /></div>
+                <h3 className="text-lg font-bold text-slate-800 pr-8">{item.title}</h3>
                 <p className="text-sm text-gray-500 mt-1">{item.createdAt ? new Date(item.createdAt.toDate()).toLocaleDateString('pt-BR') : ''}</p>
                 <p className="text-slate-600 mt-4 whitespace-pre-wrap">{item.content}</p>
             </div>
@@ -601,24 +654,76 @@ const NurturingHub = ({ nurturingContent }) => (
     </div>
 );
 
-// --- Componente Modal e Formulários ---
+// --- Componentes Genéricos ---
 
-const Modal = ({ closeModal, modalType, handleAdd, handleImport, partners }) => {
+const ActionsMenu = ({ onEdit, onDelete }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const menuRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (menuRef.current && !menuRef.current.contains(event.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    return (
+        <div className="relative" ref={menuRef}>
+            <button onClick={() => setIsOpen(!isOpen)} className="p-2 rounded-full hover:bg-gray-200">
+                <MoreVertical size={18} />
+            </button>
+            {isOpen && (
+                <div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-10 border">
+                    <button onClick={() => { onEdit(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center">
+                        <Edit size={16} className="mr-2" /> Editar
+                    </button>
+                    <button onClick={() => { onDelete(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center">
+                        <Trash2 size={16} className="mr-2" /> Excluir
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const ConfirmationModal = ({ onConfirm, onCancel }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center">
+            <div className="mx-auto bg-red-100 rounded-full h-12 w-12 flex items-center justify-center">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mt-4">Confirmar Exclusão</h3>
+            <p className="text-sm text-gray-500 mt-2">Tem a certeza de que deseja excluir este item? Esta ação não pode ser desfeita.</p>
+            <div className="mt-6 flex justify-center gap-4">
+                <button onClick={onCancel} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-semibold">Cancelar</button>
+                <button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold">Confirmar Exclusão</button>
+            </div>
+        </div>
+    </div>
+);
+
+
+const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, partners, initialData }) => {
+    const isEditMode = !!initialData;
+
     const renderForm = () => {
         switch (modalType) {
-            case 'partner': return <PartnerForm onSubmit={handleAdd} />;
-            case 'deal': return <DealForm onSubmit={handleAdd} partners={partners} />;
-            case 'resource': return <ResourceForm onSubmit={handleAdd} />;
-            case 'nurturing': return <NurturingForm onSubmit={handleAdd} />;
+            case 'partner': return <PartnerForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
+            case 'deal': return <DealForm onSubmit={isEditMode ? handleUpdate : handleAdd} partners={partners} initialData={initialData} />;
+            case 'resource': return <ResourceForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
+            case 'nurturing': return <NurturingForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'importDeals': return <ImportDealsForm onSubmit={handleImport} closeModal={closeModal} partners={partners} />;
             default: return null;
         }
     };
     const titles = { 
-        partner: 'Adicionar Novo Parceiro', 
-        deal: 'Registrar Nova Oportunidade', 
-        resource: 'Adicionar Novo Recurso', 
-        nurturing: 'Adicionar Conteúdo de Nutrição',
+        partner: isEditMode ? 'Editar Parceiro' : 'Adicionar Novo Parceiro', 
+        deal: isEditMode ? 'Editar Oportunidade' : 'Registrar Nova Oportunidade', 
+        resource: isEditMode ? 'Editar Recurso' : 'Adicionar Novo Recurso', 
+        nurturing: isEditMode ? 'Editar Conteúdo' : 'Adicionar Conteúdo de Nutrição',
         importDeals: 'Importar Oportunidades de Planilha'
     };
     return (
@@ -640,88 +745,148 @@ const FormSelect = ({ id, label, children, ...props }) => (<div><label htmlFor={
 const FormTextarea = ({ id, label, ...props }) => (<div><label htmlFor={id} className="block text-sm font-medium text-gray-700 mb-1">{label}</label><textarea id={id} {...props} rows="4" className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-sky-500 focus:border-sky-500" /></div>);
 const FormButton = ({ children, ...props }) => (<button type="submit" {...props} className="w-full bg-sky-500 text-white py-2 px-4 rounded-md hover:bg-sky-600 font-semibold transition-colors duration-200 disabled:bg-sky-300">{children}</button>);
 
-const PartnerForm = ({ onSubmit }) => {
+const PartnerForm = ({ onSubmit, initialData }) => {
+    const [formData, setFormData] = useState({
+        name: initialData?.name || '',
+        type: initialData?.type || 'FINDER',
+        contactName: initialData?.contactName || '',
+        contactEmail: initialData?.contactEmail || '',
+    });
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
-        const formData = new FormData(e.target);
-        const data = Object.fromEntries(formData.entries());
-        onSubmit('partners', data);
+        if (initialData) {
+            onSubmit('partners', initialData.id, formData);
+        } else {
+            onSubmit('partners', formData);
+        }
     };
+
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            <FormInput id="name" name="name" label="Nome do Parceiro" required />
-            <FormSelect id="type" name="type" label="Tipo de Parceiro" defaultValue="FINDER" required>
+            <FormInput id="name" name="name" label="Nome do Parceiro" value={formData.name} onChange={handleChange} required />
+            <FormSelect id="type" name="type" label="Tipo de Parceiro" value={formData.type} onChange={handleChange} required>
                 <option value="FINDER">Finder</option>
                 <option value="SELLER">Seller</option>
             </FormSelect>
-            <FormInput id="contactName" name="contactName" label="Nome do Contato" required />
-            <FormInput id="contactEmail" name="contactEmail" label="Email do Contato" type="email" required />
-            <FormButton>Salvar Parceiro</FormButton>
+            <FormInput id="contactName" name="contactName" label="Nome do Contato" value={formData.contactName} onChange={handleChange} required />
+            <FormInput id="contactEmail" name="contactEmail" label="Email do Contato" type="email" value={formData.contactEmail} onChange={handleChange} required />
+            <FormButton>{initialData ? 'Salvar Alterações' : 'Salvar Parceiro'}</FormButton>
         </form>
     );
 };
 
-const DealForm = ({ onSubmit, partners }) => {
+const DealForm = ({ onSubmit, partners, initialData }) => {
+    const [formData, setFormData] = useState({
+        clientName: initialData?.clientName || '',
+        partnerId: initialData?.partnerId || '',
+        submissionDate: initialData?.submissionDate?.toDate().toISOString().split('T')[0] || new Date().toISOString().split('T')[0],
+        value: initialData?.value || '',
+        status: initialData?.status || 'Pendente',
+    });
+
+     const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
-        const formData = new FormData(e.target);
-        const data = Object.fromEntries(formData.entries());
-        const selectedPartner = partners.find(p => p.id === data.partnerId);
-        data.partnerName = selectedPartner ? selectedPartner.name : 'N/A';
-        onSubmit('deals', data);
+        const selectedPartner = partners.find(p => p.id === formData.partnerId);
+        const dataToSubmit = { ...formData, partnerName: selectedPartner ? selectedPartner.name : 'N/A' };
+        
+        if (initialData) {
+            onSubmit('deals', initialData.id, dataToSubmit);
+        } else {
+            onSubmit('deals', dataToSubmit);
+        }
     };
+
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            <FormInput id="clientName" name="clientName" label="Nome do Cliente Final" required />
-            <FormSelect id="partnerId" name="partnerId" label="Parceiro Responsável" required>
+            <FormInput id="clientName" name="clientName" label="Nome do Cliente Final" value={formData.clientName} onChange={handleChange} required />
+            <FormSelect id="partnerId" name="partnerId" label="Parceiro Responsável" value={formData.partnerId} onChange={handleChange} required>
                 <option value="">Selecione um parceiro</option>
                 {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </FormSelect>
-             <FormInput id="submissionDate" name="submissionDate" label="Data da Indicação" type="date" defaultValue={new Date().toISOString().split('T')[0]} required />
-            <FormInput id="value" name="value" label="Valor Estimado (R$)" type="number" step="0.01" required />
-            <FormSelect id="status" name="status" label="Status" defaultValue="Pendente" required>
+             <FormInput id="submissionDate" name="submissionDate" label="Data da Indicação" type="date" value={formData.submissionDate} onChange={handleChange} required />
+            <FormInput id="value" name="value" label="Valor Estimado (R$)" type="number" step="0.01" value={formData.value} onChange={handleChange} required />
+            <FormSelect id="status" name="status" label="Status" value={formData.status} onChange={handleChange} required>
                 <option>Pendente</option>
                 <option>Aprovado</option>
                 <option>Ganho</option>
                 <option>Perdido</option>
             </FormSelect>
-            <FormButton>Registrar Oportunidade</FormButton>
+            <FormButton>{initialData ? 'Salvar Alterações' : 'Registrar Oportunidade'}</FormButton>
         </form>
     );
 };
 
-const ResourceForm = ({ onSubmit }) => {
+const ResourceForm = ({ onSubmit, initialData }) => {
+     const [formData, setFormData] = useState({
+        title: initialData?.title || '',
+        description: initialData?.description || '',
+        url: initialData?.url || '',
+        category: initialData?.category || 'Marketing',
+    });
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
-        const formData = new FormData(e.target);
-        const data = Object.fromEntries(formData.entries());
-        onSubmit('resources', data);
+        if (initialData) {
+            onSubmit('resources', initialData.id, formData);
+        } else {
+            onSubmit('resources', formData);
+        }
     };
+
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            <FormInput id="title" name="title" label="Título do Recurso" required />
-            <FormTextarea id="description" name="description" label="Descrição" required />
-            <FormInput id="url" name="url" label="URL do Recurso" type="url" required />
-            <FormSelect id="category" name="category" label="Categoria" defaultValue="Marketing" required>
+            <FormInput id="title" name="title" label="Título do Recurso" value={formData.title} onChange={handleChange} required />
+            <FormTextarea id="description" name="description" label="Descrição" value={formData.description} onChange={handleChange} required />
+            <FormInput id="url" name="url" label="URL do Recurso" type="url" value={formData.url} onChange={handleChange} required />
+            <FormSelect id="category" name="category" label="Categoria" value={formData.category} onChange={handleChange} required>
                 <option>Marketing</option><option>Vendas</option><option>Técnico</option><option>Legal</option>
             </FormSelect>
-            <FormButton>Salvar Recurso</FormButton>
+            <FormButton>{initialData ? 'Salvar Alterações' : 'Salvar Recurso'}</FormButton>
         </form>
     );
 };
 
-const NurturingForm = ({ onSubmit }) => {
+const NurturingForm = ({ onSubmit, initialData }) => {
+    const [formData, setFormData] = useState({
+        title: initialData?.title || '',
+        content: initialData?.content || '',
+    });
+
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
     const handleSubmit = (e) => {
         e.preventDefault();
-        const formData = new FormData(e.target);
-        const data = Object.fromEntries(formData.entries());
-        onSubmit('nurturing', data);
+        if (initialData) {
+            onSubmit('nurturing', initialData.id, formData);
+        } else {
+            onSubmit('nurturing', formData);
+        }
     };
+
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
-            <FormInput id="title" name="title" label="Título do Conteúdo" required />
-            <FormTextarea id="content" name="content" label="Conteúdo/Direcionamento" required />
-            <FormButton>Publicar Conteúdo</FormButton>
+            <FormInput id="title" name="title" label="Título do Conteúdo" value={formData.title} onChange={handleChange} required />
+            <FormTextarea id="content" name="content" label="Conteúdo/Direcionamento" value={formData.content} onChange={handleChange} required />
+            <FormButton>{initialData ? 'Salvar Alterações' : 'Publicar Conteúdo'}</FormButton>
         </form>
     );
 };
@@ -797,3 +962,4 @@ const ImportDealsForm = ({ onSubmit, closeModal, partners }) => {
         </form>
     );
 };
+
