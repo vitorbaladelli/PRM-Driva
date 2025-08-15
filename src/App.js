@@ -962,4 +962,3 @@ const ImportDealsForm = ({ onSubmit, closeModal, partners }) => {
         </form>
     );
 };
-
