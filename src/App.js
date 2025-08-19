@@ -21,9 +21,32 @@ import {
     orderBy
 } from 'firebase/firestore';
 import { 
-    Users, Briefcase, DollarSign, Book, Plus, X, LayoutDashboard, FileText, Gem, Trophy, Star,
-    Search, Handshake, Lightbulb, Upload, Filter, XCircle, MoreVertical, Edit, Trash2, AlertTriangle,
-    BadgePercent, ArrowLeft, User, TrendingUp, Target, Calendar, Phone, Mail, Award
+    Users, 
+    Briefcase, 
+    DollarSign, 
+    Book, 
+    Plus, 
+    X,
+    LayoutDashboard,
+    FileText,
+    Gem,
+    Trophy,
+    Star,
+    Search,
+    Handshake,
+    Lightbulb,
+    Upload,
+    Filter,
+    XCircle,
+    MoreVertical,
+    Edit,
+    Trash2,
+    AlertTriangle,
+    BadgePercent,
+    ArrowLeft,
+    User,
+    TrendingUp,
+    Target
 } from 'lucide-react';
 
 // --- Configuração do Firebase ---
@@ -73,7 +96,6 @@ export default function App() {
     const [payments, setPayments] = useState([]);
     const [resources, setResources] = useState([]);
     const [nurturingContent, setNurturingContent] = useState([]);
-    const [activities, setActivities] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalType, setModalType] = useState('');
     const [itemToEdit, setItemToEdit] = useState(null);
@@ -110,7 +132,7 @@ export default function App() {
     useEffect(() => {
         if (!isAuthReady || !db) return;
         setIsLoading(false);
-        const collections = { partners: setPartners, deals: setDeals, resources: setResources, nurturing: setNurturingContent, payments: setPayments, activities: setActivities };
+        const collections = { partners: setPartners, deals: setDeals, resources: setResources, nurturing: setNurturingContent, payments: setPayments };
         const unsubscribers = Object.entries(collections).map(([col, setter]) => {
             const q = query(collection(db, `artifacts/${appId}/public/data/${col}`), orderBy('createdAt', 'desc'));
             return onSnapshot(q, (snapshot) => setter(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))), (error) => console.error(`Erro ao carregar ${col}:`, error));
@@ -173,9 +195,9 @@ export default function App() {
                 <Header openModal={openModal} startDate={startDate} endDate={endDate} setStartDate={setStartDate} setEndDate={setEndDate} selectedDealsCount={selectedDeals.length} onBulkDeleteDeals={() => handleBulkDelete('deals', selectedDeals)} selectedPaymentsCount={selectedPayments.length} onBulkDeletePayments={() => handleBulkDelete('payments', selectedPayments)}/>
                 <div className="mt-6">
                     <Routes>
-                        <Route path="/" element={<Dashboard partners={partnersWithDetails} deals={filteredDeals} recentActivities={activities.slice(0, 5)} onEdit={(activity) => openModal('activity', activity)} onDelete={(id) => handleDelete('activities', id)} />} />
+                        <Route path="/" element={<Dashboard partners={partnersWithDetails} deals={filteredDeals} />} />
                         <Route path="/partners" element={<PartnerList partners={partnersWithDetails} onEdit={(p) => openModal('partner', p)} onDelete={(id) => handleDelete('partners', id)} />} />
-                        <Route path="/partners/:partnerId" element={<PartnerDetail allPartners={partnersWithDetails} allActivities={activities} openModal={openModal} onDelete={(id) => handleDelete('activities', id)} />} />
+                        <Route path="/partners/:partnerId" element={<PartnerDetail allPartners={partnersWithDetails} />} />
                         <Route path="/deals" element={<DealList deals={filteredDeals} onEdit={(d) => openModal('deal', d)} onDelete={(id) => handleDelete('deals', id)} selectedDeals={selectedDeals} setSelectedDeals={setSelectedDeals} />} />
                         <Route path="/commissioning" element={<CommissioningList payments={filteredPayments} onImport={(file) => handleImport(file, 'payments')} selectedPayments={selectedPayments} setSelectedPayments={setSelectedPayments} />} />
                         <Route path="/resources" element={<ResourceHub resources={resources} onEdit={(r) => openModal('resource', r)} onDelete={(id) => handleDelete('resources', id)} />} />
@@ -227,25 +249,14 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
     );
 };
 
-const Dashboard = ({ partners, deals, recentActivities, onEdit, onDelete }) => {
+const Dashboard = ({ partners, deals }) => {
     const { totalPayments, totalGeneratedRevenue } = useMemo(() => {
         const totalPayments = partners.reduce((sum, p) => sum + p.paymentsReceived, 0);
         const totalGeneratedRevenue = partners.reduce((sum, p) => sum + p.generatedRevenue, 0);
         return { totalPayments, totalGeneratedRevenue };
     }, [partners]);
     const stats = [ { title: 'Total de Parceiros', value: partners.length, icon: Users, color: 'text-blue-500' }, { title: 'Oportunidades no Período', value: deals.length, icon: Briefcase, color: 'text-orange-500' }, { title: 'Receita Gerada (Ganhos)', value: `R$ ${totalGeneratedRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Target, color: 'text-indigo-500' }, { title: 'Pagamentos Recebidos', value: `R$ ${totalPayments.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-green-500' }, ];
-    return ( 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">{stats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div>
-                <div className="mt-6"><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div>
-            </div>
-            <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-md">
-                <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><TrendingUp className="mr-2"/>Atividades Recentes</h2>
-                <ActivityFeed activities={recentActivities} onEdit={onEdit} onDelete={onDelete} />
-            </div>
-        </div> 
-    );
+    return ( <div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">{stats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div><div className="mt-8"><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div></div> );
 };
 
 const PartnerList = ({ partners, onEdit, onDelete }) => {
@@ -272,10 +283,9 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
     </div>
 )};
 
-const PartnerDetail = ({ allPartners, allActivities, openModal, onDelete }) => {
+const PartnerDetail = ({ allPartners }) => {
     const { partnerId } = useParams();
     const partner = allPartners.find(p => p.id === partnerId);
-    const partnerActivities = useMemo(() => allActivities.filter(a => a.partnerId === partnerId), [allActivities, partnerId]);
     if (!partner) return <div className="text-center text-gray-500">Parceiro não encontrado.</div>;
     return (
         <div>
@@ -293,13 +303,7 @@ const PartnerDetail = ({ allPartners, allActivities, openModal, onDelete }) => {
                     </div>
                 </div>
             </div>
-            <div className="mt-6 bg-white p-6 rounded-xl shadow-md">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-slate-700">Histórico de Atividades</h3>
-                    <button onClick={() => openModal('activity', partner)} className="flex items-center bg-sky-100 text-sky-700 px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-sky-200"><Plus size={16} className="mr-2"/>Adicionar Atividade</button>
-                </div>
-                <ActivityFeed activities={partnerActivities} onEdit={(activity) => openModal('activity', activity)} onDelete={(id) => onDelete('activities', id)} />
-            </div>
+            {/* Activity Feed placeholder */}
         </div>
     );
 };
@@ -454,7 +458,7 @@ const ActivityForm = ({ onSubmit, initialData }) => {
 };
 
 const ActivityFeed = ({ activities, onEdit, onDelete }) => {
-    const activityIcons = { 'Reunião': 'calendar', 'Ligação': 'phone', 'Email': 'mail', 'Marco': 'award' };
+    const activityIcons = { 'Reunião': Calendar, 'Ligação': Phone, 'Email': Mail, 'Marco': Award };
     const timeSince = (date) => {
         if (!date) return '';
         const seconds = Math.floor((new Date() - date) / 1000);
@@ -468,16 +472,19 @@ const ActivityFeed = ({ activities, onEdit, onDelete }) => {
     if (activities.length === 0) return <p className="text-center text-gray-500 text-sm mt-4">Nenhuma atividade registrada.</p>;
     return (
         <div className="space-y-4">
-            {activities.map(activity => (
-                <div key={activity.id} className="flex gap-4 group">
-                    <div className="flex-shrink-0 w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center"><Icon name={activityIcons[activity.type] || 'file-text'} className="h-5 w-5 text-gray-500" /></div>
-                    <div className="flex-grow">
-                        <p className="text-sm text-gray-800">{activity.description}</p>
-                        <p className="text-xs text-gray-500"><strong>{activity.partnerName}</strong> - {timeSince(activity.createdAt?.toDate())}</p>
+            {activities.map(activity => {
+                const Icon = activityIcons[activity.type] || FileText;
+                return (
+                    <div key={activity.id} className="flex gap-4 group">
+                        <div className="flex-shrink-0 w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center"><Icon className="h-5 w-5 text-gray-500" /></div>
+                        <div className="flex-grow">
+                            <p className="text-sm text-gray-800">{activity.description}</p>
+                            <p className="text-xs text-gray-500"><strong>{activity.partnerName}</strong> - {timeSince(activity.createdAt?.toDate())}</p>
+                        </div>
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity"><ActionsMenu onEdit={() => onEdit(activity)} onDelete={() => onDelete(activity.id)} /></div>
                     </div>
-                    <div className="opacity-0 group-hover:opacity-100 transition-opacity"><ActionsMenu onEdit={() => onEdit(activity)} onDelete={() => onDelete(activity.id)} /></div>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 };
