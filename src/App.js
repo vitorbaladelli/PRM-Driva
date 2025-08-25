@@ -30,24 +30,6 @@ import {
     BadgePercent, ArrowLeft, User, TrendingUp, Target, Calendar, Phone, Mail, Award, LogOut, FileText
 } from 'lucide-react';
 
-// --- Logos da Driva (SVG) ---
-const DrivaLogoPositiva = () => (
-    <svg width="150" height="40" viewBox="0 0 263 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M47.7381 4.2832C44.4284 4.2832 41.431 6.10645 39.9999 8.85449L2.85708 61.4281C1.16223 64.502 3.89685 68.2852 7.42849 68.2852H55.1428C58.6744 68.2852 61.409 64.502 59.7142 61.4281L47.7381 4.2832Z" fill="#003559"/>
-        <path d="M25.7142 42.856L2.85708 3.5708C1.16223 0.496826 3.89685 -3.28638 7.42849 -3.28638H44.8571C48.3887 -3.28638 51.1233 0.496826 49.4285 3.5708L28.2856 40.4276V60.9995C28.2856 63.6138 25.3999 65.1424 23.4285 63.4281L19.7142 59.9995C18.0928 58.5452 18.2613 56.0122 19.9999 54.5708L25.7142 49.7138V42.856Z" fill="#003559"/>
-        <path d="M29.1429 51L24 55.7143C22.1314 57.4286 24.8572 60.1429 26.7143 58.4286L31.8572 53.7143C33.7258 52 31.0001 49.2857 29.1429 51Z" fill="#F28423"/>
-        <path d="M83.7693 21.5254V61.428H77.1693V21.5254H69.1293V16H98.4093V21.5254H83.7693ZM110.741 61.428H104.011L99.9613 51.628H89.9513V61.428H83.3513V16H97.7813C103.861 16 107.811 19.16 107.811 24.52C107.811 28.36 105.731 31.08 102.691 32.44L107.971 45.988L110.741 61.428ZM95.3413 36.28H92.6813V21.4H95.3413C97.9013 21.4 99.2813 22.48 99.2813 25.04C99.2813 27.6 97.9013 28.68 95.3413 28.68V36.28ZM132.837 61.428H126.237V16H132.837V61.428ZM154.343 61.428L146.723 45.148L139.103 61.428H132.143L142.823 39.548V16H149.423V25.388L160.103 47.168V61.428H154.343ZM172.333 16V61.428H165.733V16H172.333ZM186.645 37.268C186.645 27.848 181.245 22.028 172.605 22.028C163.965 22.028 158.565 27.848 158.565 37.268C158.565 46.688 163.965 52.508 172.605 52.508C181.245 52.508 186.645 46.688 186.645 37.268ZM179.805 37.268C179.805 43.168 176.685 46.888 172.605 46.888C168.525 46.888 165.405 43.168 165.405 37.268C165.405 31.368 168.525 27.648 172.605 27.648C176.685 27.648 179.805 31.368 179.805 37.268Z" fill="#003559"/>
-    </svg>
-);
-const DrivaLogoNegativa = () => (
-    <svg width="150" height="40" viewBox="0 0 263 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M47.7381 4.2832C44.4284 4.2832 41.431 6.10645 39.9999 8.85449L2.85708 61.4281C1.16223 64.502 3.89685 68.2852 7.42849 68.2852H55.1428C58.6744 68.2852 61.409 64.502 59.7142 61.4281L47.7381 4.2832Z" fill="white"/>
-        <path d="M25.7142 42.856L2.85708 3.5708C1.16223 0.496826 3.89685 -3.28638 7.42849 -3.28638H44.8571C48.3887 -3.28638 51.1233 0.496826 49.4285 3.5708L28.2856 40.4276V60.9995C28.2856 63.6138 25.3999 65.1424 23.4285 63.4281L19.7142 59.9995C18.0928 58.5452 18.2613 56.0122 19.9999 54.5708L25.7142 49.7138V42.856Z" fill="white"/>
-        <path d="M29.1429 51L24 55.7143C22.1314 57.4286 24.8572 60.1429 26.7143 58.4286L31.8572 53.7143C33.7258 52 31.0001 49.2857 29.1429 51Z" fill="#F28423"/>
-        <path d="M83.7693 21.5254V61.428H77.1693V21.5254H69.1293V16H98.4093V21.5254H83.7693ZM110.741 61.428H104.011L99.9613 51.628H89.9513V61.428H83.3513V16H97.7813C103.861 16 107.811 19.16 107.811 24.52C107.811 28.36 105.731 31.08 102.691 32.44L107.971 45.988L110.741 61.428ZM95.3413 36.28H92.6813V21.4H95.3413C97.9013 21.4 99.2813 22.48 99.2813 25.04C99.2813 27.6 97.9013 28.68 95.3413 28.68V36.28ZM132.837 61.428H126.237V16H132.837V61.428ZM154.343 61.428L146.723 45.148L139.103 61.428H132.143L142.823 39.548V16H149.423V25.388L160.103 47.168V61.428H154.343ZM172.333 16V61.428H165.733V16H172.333ZM186.645 37.268C186.645 27.848 181.245 22.028 172.605 22.028C163.965 22.028 158.565 27.848 158.565 37.268C158.565 46.688 163.965 52.508 172.605 52.508C181.245 52.508 186.645 46.688 186.645 37.268ZM179.805 37.268C179.805 43.168 176.685 46.888 172.605 46.888C168.525 46.888 165.405 43.168 165.405 37.268C165.405 31.368 168.525 27.648 172.605 27.648C176.685 27.648 179.805 31.368 179.805 37.268Z" fill="white"/>
-    </svg>
-);
-
 // --- Configuração do Firebase ---
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
@@ -112,7 +94,7 @@ const LoginPage = ({ auth }) => {
         <div className="flex items-center justify-center min-h-screen bg-gray-100">
             <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
                 <div className="flex justify-center">
-                    <DrivaLogoPositiva />
+                    <img src="/logo-driva-positiva.png" alt="Logo Driva" className="h-12"/>
                 </div>
                 <h2 className="text-2xl font-bold text-center text-slate-800">Acesso ao PRM Driva</h2>
                 <form onSubmit={handleLogin} className="space-y-6">
@@ -270,7 +252,7 @@ const Sidebar = ({ auth }) => {
     const location = useLocation();
     const handleLogout = () => signOut(auth);
     const navItems = [ { path: '/', label: 'Dashboard', icon: LayoutDashboard }, { path: '/partners', label: 'Parceiros', icon: Users }, { path: '/deals', label: 'Oportunidades', icon: Briefcase }, { path: '/commissioning', label: 'Comissionamento', icon: BadgePercent }, { path: '/resources', label: 'Recursos', icon: Book }, { path: '/nurturing', label: 'Nutrição', icon: Lightbulb }, ];
-    return ( <aside className="w-16 sm:w-64 bg-slate-800 text-white flex flex-col"><div className="h-16 flex items-center justify-center sm:justify-start sm:px-4 border-b border-slate-700"><DrivaLogoNegativa /></div><nav className="flex-1 mt-6"><ul>{navItems.map(item => (<li key={item.path} className="px-3 sm:px-6 py-1"><Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname.startsWith(item.path) && item.path !== '/' || location.pathname === item.path ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}><item.icon className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">{item.label}</span></Link></li>))}</ul></nav><div className="p-4 border-t border-slate-700"><button onClick={handleLogout} className="w-full flex items-center p-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white"><LogOut className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">Sair</span></button></div></aside> );
+    return ( <aside className="w-16 sm:w-64 bg-slate-800 text-white flex flex-col"><div className="h-16 flex items-center justify-center sm:justify-start sm:px-4 border-b border-slate-700"><img src="/logo-driva-negativa.png" alt="Logo Driva" className="h-8" /></div><nav className="flex-1 mt-6"><ul>{navItems.map(item => (<li key={item.path} className="px-3 sm:px-6 py-1"><Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname.startsWith(item.path) && item.path !== '/' || location.pathname === item.path ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}><item.icon className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">{item.label}</span></Link></li>))}</ul></nav><div className="p-4 border-t border-slate-700"><button onClick={handleLogout} className="w-full flex items-center p-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white"><LogOut className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">Sair</span></button></div></aside> );
 };
 
 const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selectedDealsCount, onBulkDeleteDeals, selectedPaymentsCount, onBulkDeletePayments }) => {
