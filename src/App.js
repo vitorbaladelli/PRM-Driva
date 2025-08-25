@@ -3,8 +3,9 @@ import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-
 import { initializeApp } from 'firebase/app';
 import { 
     getAuth, 
-    signInAnonymously, 
     onAuthStateChanged,
+    signInWithEmailAndPassword,
+    signOut
 } from 'firebase/auth';
 import { 
     getFirestore, 
@@ -21,36 +22,12 @@ import {
     orderBy
 } from 'firebase/firestore';
 import { 
-    Users, 
-    Briefcase, 
-    DollarSign, 
-    Book, 
-    Plus, 
-    X,
-    LayoutDashboard,
-    FileText,
-    Gem,
-    Trophy,
-    Star,
-    Search,
-    Handshake,
-    Lightbulb,
-    Upload,
-    Filter,
-    XCircle,
-    MoreVertical,
-    Edit,
-    Trash2,
-    AlertTriangle,
-    BadgePercent,
-    ArrowLeft,
-    User,
-    TrendingUp,
-    Target
+    Users, Briefcase, DollarSign, Book, Plus, X, LayoutDashboard, FileText, Gem, Trophy, Star,
+    Search, Handshake, Lightbulb, Upload, Filter, XCircle, MoreVertical, Edit, Trash2, AlertTriangle,
+    BadgePercent, ArrowLeft, User, TrendingUp, Target, Calendar, Phone, Mail, Award, LogOut
 } from 'lucide-react';
 
 // --- Configuração do Firebase ---
-// As chaves são carregadas a partir de Variáveis de Ambiente configuradas na Vercel
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
   authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
@@ -86,59 +63,81 @@ const getPartnerDetails = (paymentsReceived, type) => {
     return { name: 'N/A', icon: Users, color: 'text-slate-400', bgColor: 'bg-slate-100', commissionRate: 0 };
 };
 
+// --- Componente de Login ---
+const LoginPage = ({ auth }) => {
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const handleLogin = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setError('');
+        try {
+            await signInWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+            setError('Email ou senha inválidos. Por favor, tente novamente.');
+            console.error("Erro de login:", error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="flex items-center justify-center min-h-screen bg-gray-100">
+            <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
+                <div className="flex justify-center">
+                    <FileText className="h-12 w-12 text-sky-500" />
+                </div>
+                <h2 className="text-2xl font-bold text-center text-slate-800">Acesso ao PRM Driva</h2>
+                <form onSubmit={handleLogin} className="space-y-6">
+                    <FormInput id="email" name="email" type="email" label="Email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                    <FormInput id="password" name="password" type="password" label="Senha" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                    {error && <p className="text-sm text-red-600 text-center">{error}</p>}
+                    <FormButton disabled={loading}>{loading ? 'A entrar...' : 'Entrar'}</FormButton>
+                </form>
+            </div>
+        </div>
+    );
+};
+
+
 // --- Componente Principal do App ---
-export default function App() {
-    // --- Estados ---
+function PrmApp({ auth }) {
     const [db, setDb] = useState(null);
-    const [isAuthReady, setIsAuthReady] = useState(false);
     const [partners, setPartners] = useState([]);
     const [deals, setDeals] = useState([]);
     const [payments, setPayments] = useState([]);
     const [resources, setResources] = useState([]);
     const [nurturingContent, setNurturingContent] = useState([]);
+    const [activities, setActivities] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalType, setModalType] = useState('');
     const [itemToEdit, setItemToEdit] = useState(null);
     const [itemToDelete, setItemToDelete] = useState(null);
     const [bulkDeleteConfig, setBulkDeleteConfig] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [selectedDeals, setSelectedDeals] = useState([]);
     const [selectedPayments, setSelectedPayments] = useState([]);
 
-    // --- Efeito de Inicialização do Firebase ---
     useEffect(() => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js';
-        script.async = true;
-        document.head.appendChild(script);
-        try {
-            if(firebaseConfig.apiKey) {
-                const app = initializeApp(firebaseConfig);
-                const authInstance = getAuth(app);
-                const dbInstance = getFirestore(app);
-                setDb(dbInstance);
-                const unsubscribe = onAuthStateChanged(authInstance, async (user) => {
-                    if (!user) await signInAnonymously(authInstance);
-                    setIsAuthReady(true);
-                });
-                return () => { unsubscribe(); if (document.head.contains(script)) document.head.removeChild(script); };
-            } else { setIsLoading(false); }
-        } catch (error) { console.error("Erro na inicialização do Firebase:", error); setIsAuthReady(true); }
-    }, []);
+        if (auth) {
+            setDb(getFirestore(auth.app));
+        }
+    }, [auth]);
 
     // --- Efeito para Carregar Dados do Firestore ---
     useEffect(() => {
-        if (!isAuthReady || !db) return;
-        setIsLoading(false);
-        const collections = { partners: setPartners, deals: setDeals, resources: setResources, nurturing: setNurturingContent, payments: setPayments };
+        if (!db) return;
+        const collections = { partners: setPartners, deals: setDeals, resources: setResources, nurturing: setNurturingContent, payments: setPayments, activities: setActivities };
         const unsubscribers = Object.entries(collections).map(([col, setter]) => {
             const q = query(collection(db, `artifacts/${appId}/public/data/${col}`), orderBy('createdAt', 'desc'));
             return onSnapshot(q, (snapshot) => setter(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))), (error) => console.error(`Erro ao carregar ${col}:`, error));
         });
         return () => unsubscribers.forEach(unsub => unsub());
-    }, [isAuthReady, db]);
+    }, [db]);
 
     // --- Lógica de Filtragem por Data ---
     const filteredDeals = useMemo(() => {
@@ -184,20 +183,16 @@ export default function App() {
     const confirmBulkDelete = async () => { if (!db || !bulkDeleteConfig) return; try { const { collectionName, ids } = bulkDeleteConfig; const batch = writeBatch(db); ids.forEach(id => batch.delete(doc(db, `artifacts/${appId}/public/data/${collectionName}`, id))); await batch.commit(); if (collectionName === 'deals') setSelectedDeals([]); if (collectionName === 'payments') setSelectedPayments([]); setBulkDeleteConfig(null); } catch (e) { console.error("Erro ao excluir em massa:", e); } };
     const handleImport = async (file, collectionName) => { if (!file || !db) return; const partnersMap = new Map(partners.map(p => [p.name.toLowerCase(), p.id])); return new Promise((resolve, reject) => { window.Papa.parse(file, { header: true, skipEmptyLines: true, complete: async (res) => { const batch = writeBatch(db); const colRef = collection(db, `artifacts/${appId}/public/data/${collectionName}`); let s = 0, f = 0; res.data.forEach(item => { const pId = partnersMap.get(item.partnerName?.toLowerCase()); if (pId) { const newDoc = doc(colRef); let data = { partnerId: pId, partnerName: item.partnerName, createdAt: serverTimestamp() }; if (collectionName === 'payments') { data.clientName = item.clientName; data.paymentValue = parseBrazilianCurrency(item.paymentValue); data.paymentDate = Timestamp.fromDate(new Date(item.paymentDate.split(' ')[0])); } batch.set(newDoc, data); s++; } else { f++; } }); try { await batch.commit(); resolve({ successfulImports: s, failedImports: f }); } catch (e) { reject(e); } }, error: (e) => reject(e) }); }); };
 
-    // --- Renderização ---
-    if (isLoading) return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-semibold text-gray-700">A carregar PRM Driva...</div></div>;
-    if (!firebaseConfig.apiKey) return <div className="flex items-center justify-center h-screen bg-red-50 text-red-800 p-8"><div className="text-center"><h2 className="text-2xl font-bold mb-4">Erro de Configuração</h2><p>As chaves do Firebase não foram encontradas.</p></div></div>;
-
     return (
         <div className="flex h-screen bg-gray-50 font-sans">
-            <Sidebar />
+            <Sidebar auth={auth} />
             <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
                 <Header openModal={openModal} startDate={startDate} endDate={endDate} setStartDate={setStartDate} setEndDate={setEndDate} selectedDealsCount={selectedDeals.length} onBulkDeleteDeals={() => handleBulkDelete('deals', selectedDeals)} selectedPaymentsCount={selectedPayments.length} onBulkDeletePayments={() => handleBulkDelete('payments', selectedPayments)}/>
                 <div className="mt-6">
                     <Routes>
-                        <Route path="/" element={<Dashboard partners={partnersWithDetails} deals={filteredDeals} />} />
+                        <Route path="/" element={<Dashboard partners={partnersWithDetails} deals={filteredDeals} recentActivities={activities.slice(0, 5)} onEdit={(activity) => openModal('activity', activity)} onDelete={(id) => handleDelete('activities', id)} />} />
                         <Route path="/partners" element={<PartnerList partners={partnersWithDetails} onEdit={(p) => openModal('partner', p)} onDelete={(id) => handleDelete('partners', id)} />} />
-                        <Route path="/partners/:partnerId" element={<PartnerDetail allPartners={partnersWithDetails} />} />
+                        <Route path="/partners/:partnerId" element={<PartnerDetail allPartners={partnersWithDetails} allActivities={activities} openModal={openModal} onDelete={(id) => handleDelete('activities', id)} />} />
                         <Route path="/deals" element={<DealList deals={filteredDeals} onEdit={(d) => openModal('deal', d)} onDelete={(id) => handleDelete('deals', id)} selectedDeals={selectedDeals} setSelectedDeals={setSelectedDeals} />} />
                         <Route path="/commissioning" element={<CommissioningList payments={filteredPayments} onImport={(file) => handleImport(file, 'payments')} selectedPayments={selectedPayments} setSelectedPayments={setSelectedPayments} />} />
                         <Route path="/resources" element={<ResourceHub resources={resources} onEdit={(r) => openModal('resource', r)} onDelete={(id) => handleDelete('resources', id)} />} />
@@ -212,11 +207,42 @@ export default function App() {
     );
 }
 
+export default function AppWrapper() {
+    const [auth, setAuth] = useState(null);
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js';
+        script.async = true;
+        document.head.appendChild(script);
+        try {
+            if(firebaseConfig.apiKey) {
+                const app = initializeApp(firebaseConfig);
+                const authInstance = getAuth(app);
+                setAuth(authInstance);
+                const unsubscribe = onAuthStateChanged(authInstance, (user) => {
+                    setUser(user);
+                    setLoading(false);
+                });
+                return () => { unsubscribe(); if (document.head.contains(script)) document.head.removeChild(script); };
+            } else { setLoading(false); }
+        } catch (error) { console.error("Erro na inicialização:", error); setLoading(false); }
+    }, []);
+
+    if (loading) return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-semibold text-gray-700">A carregar...</div></div>;
+    if (!firebaseConfig.apiKey) return <div className="flex items-center justify-center h-screen bg-red-50 text-red-800 p-8"><div className="text-center"><h2 className="text-2xl font-bold mb-4">Erro de Configuração</h2><p>As chaves do Firebase não foram encontradas.</p></div></div>;
+
+    return user ? <PrmApp auth={auth} /> : <LoginPage auth={auth} />;
+}
+
 // --- Componentes de UI ---
-const Sidebar = () => {
+const Sidebar = ({ auth }) => {
     const location = useLocation();
+    const handleLogout = () => signOut(auth);
     const navItems = [ { path: '/', label: 'Dashboard', icon: LayoutDashboard }, { path: '/partners', label: 'Parceiros', icon: Users }, { path: '/deals', label: 'Oportunidades', icon: Briefcase }, { path: '/commissioning', label: 'Comissionamento', icon: BadgePercent }, { path: '/resources', label: 'Recursos', icon: Book }, { path: '/nurturing', label: 'Nutrição', icon: Lightbulb }, ];
-    return ( <aside className="w-16 sm:w-64 bg-slate-800 text-white flex flex-col"><div className="h-16 flex items-center justify-center sm:justify-start sm:px-6 border-b border-slate-700"><FileText className="h-8 w-8 text-sky-400" /><h1 className="hidden sm:block ml-3 text-xl font-bold">PRM Driva</h1></div><nav className="flex-1 mt-6"><ul>{navItems.map(item => (<li key={item.path} className="px-3 sm:px-6 py-1"><Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname.startsWith(item.path) && item.path !== '/' || location.pathname === item.path ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}><item.icon className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">{item.label}</span></Link></li>))}</ul></nav></aside> );
+    return ( <aside className="w-16 sm:w-64 bg-slate-800 text-white flex flex-col"><div className="h-16 flex items-center justify-center sm:justify-start sm:px-6 border-b border-slate-700"><FileText className="h-8 w-8 text-sky-400" /><h1 className="hidden sm:block ml-3 text-xl font-bold">PRM Driva</h1></div><nav className="flex-1 mt-6"><ul>{navItems.map(item => (<li key={item.path} className="px-3 sm:px-6 py-1"><Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname.startsWith(item.path) && item.path !== '/' || location.pathname === item.path ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}><item.icon className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">{item.label}</span></Link></li>))}</ul></nav><div className="p-4 border-t border-slate-700"><button onClick={handleLogout} className="w-full flex items-center p-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white"><LogOut className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">Sair</span></button></div></aside> );
 };
 
 const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selectedDealsCount, onBulkDeleteDeals, selectedPaymentsCount, onBulkDeletePayments }) => {
@@ -249,14 +275,25 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
     );
 };
 
-const Dashboard = ({ partners, deals }) => {
+const Dashboard = ({ partners, deals, recentActivities, onEdit, onDelete }) => {
     const { totalPayments, totalGeneratedRevenue } = useMemo(() => {
         const totalPayments = partners.reduce((sum, p) => sum + p.paymentsReceived, 0);
         const totalGeneratedRevenue = partners.reduce((sum, p) => sum + p.generatedRevenue, 0);
         return { totalPayments, totalGeneratedRevenue };
     }, [partners]);
     const stats = [ { title: 'Total de Parceiros', value: partners.length, icon: Users, color: 'text-blue-500' }, { title: 'Oportunidades no Período', value: deals.length, icon: Briefcase, color: 'text-orange-500' }, { title: 'Receita Gerada (Ganhos)', value: `R$ ${totalGeneratedRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Target, color: 'text-indigo-500' }, { title: 'Pagamentos Recebidos', value: `R$ ${totalPayments.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-green-500' }, ];
-    return ( <div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">{stats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div><div className="mt-8"><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div></div> );
+    return ( 
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">{stats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div>
+                <div className="mt-6"><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div>
+            </div>
+            <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-md">
+                <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><TrendingUp className="mr-2"/>Atividades Recentes</h2>
+                <ActivityFeed activities={recentActivities} onEdit={onEdit} onDelete={onDelete} />
+            </div>
+        </div> 
+    );
 };
 
 const PartnerList = ({ partners, onEdit, onDelete }) => {
@@ -283,9 +320,10 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
     </div>
 )};
 
-const PartnerDetail = ({ allPartners }) => {
+const PartnerDetail = ({ allPartners, allActivities, openModal, onDelete }) => {
     const { partnerId } = useParams();
     const partner = allPartners.find(p => p.id === partnerId);
+    const partnerActivities = useMemo(() => allActivities.filter(a => a.partnerId === partnerId), [allActivities, partnerId]);
     if (!partner) return <div className="text-center text-gray-500">Parceiro não encontrado.</div>;
     return (
         <div>
@@ -303,7 +341,13 @@ const PartnerDetail = ({ allPartners }) => {
                     </div>
                 </div>
             </div>
-            {/* Activity Feed placeholder */}
+            <div className="mt-6 bg-white p-6 rounded-xl shadow-md">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold text-slate-700">Histórico de Atividades</h3>
+                    <button onClick={() => openModal('activity', partner)} className="flex items-center bg-sky-100 text-sky-700 px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-sky-200"><Plus size={16} className="mr-2"/>Adicionar Atividade</button>
+                </div>
+                <ActivityFeed activities={partnerActivities} onEdit={(activity) => openModal('activity', activity)} onDelete={(id) => onDelete('activities', id)} />
+            </div>
         </div>
     );
 };
