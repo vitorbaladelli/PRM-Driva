@@ -30,24 +30,6 @@ import {
     BadgePercent, ArrowLeft, User, TrendingUp, Target, Calendar, Phone, Mail, Award, LogOut, FileText
 } from 'lucide-react';
 
-// --- Logos da Driva (SVG) ---
-const DrivaLogoPositiva = () => (
-    <svg width="150" height="40" viewBox="0 0 263 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M47.7381 4.2832C44.4284 4.2832 41.431 6.10645 39.9999 8.85449L2.85708 61.4281C1.16223 64.502 3.89685 68.2852 7.42849 68.2852H55.1428C58.6744 68.2852 61.409 64.502 59.7142 61.4281L47.7381 4.2832Z" fill="#003559"/>
-        <path d="M25.7142 42.856L2.85708 3.5708C1.16223 0.496826 3.89685 -3.28638 7.42849 -3.28638H44.8571C48.3887 -3.28638 51.1233 0.496826 49.4285 3.5708L28.2856 40.4276V60.9995C28.2856 63.6138 25.3999 65.1424 23.4285 63.4281L19.7142 59.9995C18.0928 58.5452 18.2613 56.0122 19.9999 54.5708L25.7142 49.7138V42.856Z" fill="#003559"/>
-        <path d="M29.1429 51L24 55.7143C22.1314 57.4286 24.8572 60.1429 26.7143 58.4286L31.8572 53.7143C33.7258 52 31.0001 49.2857 29.1429 51Z" fill="#F28423"/>
-        <path d="M83.7693 21.5254V61.428H77.1693V21.5254H69.1293V16H98.4093V21.5254H83.7693ZM110.741 61.428H104.011L99.9613 51.628H89.9513V61.428H83.3513V16H97.7813C103.861 16 107.811 19.16 107.811 24.52C107.811 28.36 105.731 31.08 102.691 32.44L107.971 45.988L110.741 61.428ZM95.3413 36.28H92.6813V21.4H95.3413C97.9013 21.4 99.2813 22.48 99.2813 25.04C99.2813 27.6 97.9013 28.68 95.3413 28.68V36.28ZM132.837 61.428H126.237V16H132.837V61.428ZM154.343 61.428L146.723 45.148L139.103 61.428H132.143L142.823 39.548V16H149.423V25.388L160.103 47.168V61.428H154.343ZM172.333 16V61.428H165.733V16H172.333ZM186.645 37.268C186.645 27.848 181.245 22.028 172.605 22.028C163.965 22.028 158.565 27.848 158.565 37.268C158.565 46.688 163.965 52.508 172.605 52.508C181.245 52.508 186.645 46.688 186.645 37.268ZM179.805 37.268C179.805 43.168 176.685 46.888 172.605 46.888C168.525 46.888 165.405 43.168 165.405 37.268C165.405 31.368 168.525 27.648 172.605 27.648C176.685 27.648 179.805 31.368 179.805 37.268Z" fill="#003559"/>
-    </svg>
-);
-const DrivaLogoNegativa = () => (
-    <svg width="150" height="40" viewBox="0 0 263 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M47.7381 4.2832C44.4284 4.2832 41.431 6.10645 39.9999 8.85449L2.85708 61.4281C1.16223 64.502 3.89685 68.2852 7.42849 68.2852H55.1428C58.6744 68.2852 61.409 64.502 59.7142 61.4281L47.7381 4.2832Z" fill="white"/>
-        <path d="M25.7142 42.856L2.85708 3.5708C1.16223 0.496826 3.89685 -3.28638 7.42849 -3.28638H44.8571C48.3887 -3.28638 51.1233 0.496826 49.4285 3.5708L28.2856 40.4276V60.9995C28.2856 63.6138 25.3999 65.1424 23.4285 63.4281L19.7142 59.9995C18.0928 58.5452 18.2613 56.0122 19.9999 54.5708L25.7142 49.7138V42.856Z" fill="white"/>
-        <path d="M29.1429 51L24 55.7143C22.1314 57.4286 24.8572 60.1429 26.7143 58.4286L31.8572 53.7143C33.7258 52 31.0001 49.2857 29.1429 51Z" fill="#F28423"/>
-        <path d="M83.7693 21.5254V61.428H77.1693V21.5254H69.1293V16H98.4093V21.5254H83.7693ZM110.741 61.428H104.011L99.9613 51.628H89.9513V61.428H83.3513V16H97.7813C103.861 16 107.811 19.16 107.811 24.52C107.811 28.36 105.731 31.08 102.691 32.44L107.971 45.988L110.741 61.428ZM95.3413 36.28H92.6813V21.4H95.3413C97.9013 21.4 99.2813 22.48 99.2813 25.04C99.2813 27.6 97.9013 28.68 95.3413 28.68V36.28ZM132.837 61.428H126.237V16H132.837V61.428ZM154.343 61.428L146.723 45.148L139.103 61.428H132.143L142.823 39.548V16H149.423V25.388L160.103 47.168V61.428H154.343ZM172.333 16V61.428H165.733V16H172.333ZM186.645 37.268C186.645 27.848 181.245 22.028 172.605 22.028C163.965 22.028 158.565 27.848 158.565 37.268C158.565 46.688 163.965 52.508 172.605 52.508C181.245 52.508 186.645 46.688 186.645 37.268ZM179.805 37.268C179.805 43.168 176.685 46.888 172.605 46.888C168.525 46.888 165.405 43.168 165.405 37.268C165.405 31.368 168.525 27.648 172.605 27.648C176.685 27.648 179.805 31.368 179.805 37.268Z" fill="white"/>
-    </svg>
-);
-
 // --- Configuração do Firebase ---
 const firebaseConfig = {
   apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
@@ -112,7 +94,7 @@ const LoginPage = ({ auth }) => {
         <div className="flex items-center justify-center min-h-screen bg-gray-100">
             <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
                 <div className="flex justify-center">
-                    <DrivaLogoPositiva />
+                    <img src="/logo-driva-positiva.png" alt="Logo Driva" className="h-12"/>
                 </div>
                 <h2 className="text-2xl font-bold text-center text-slate-800">Acesso ao PRM Driva</h2>
                 <form onSubmit={handleLogin} className="space-y-6">
@@ -209,7 +191,60 @@ function PrmApp({ auth }) {
     const confirmDelete = async () => { if (!db || !itemToDelete) return; try { await deleteDoc(doc(db, `artifacts/${appId}/public/data/${itemToDelete.collectionName}`, itemToDelete.id)); setItemToDelete(null); } catch (e) { console.error("Erro ao excluir:", e); } };
     const handleBulkDelete = (collectionName, ids) => { if(ids.length > 0) setBulkDeleteConfig({ collectionName, ids, title: `Excluir ${ids.length} itens?`, message: `Tem a certeza de que deseja excluir os ${ids.length} itens selecionados?` }); };
     const confirmBulkDelete = async () => { if (!db || !bulkDeleteConfig) return; try { const { collectionName, ids } = bulkDeleteConfig; const batch = writeBatch(db); ids.forEach(id => batch.delete(doc(db, `artifacts/${appId}/public/data/${collectionName}`, id))); await batch.commit(); if (collectionName === 'deals') setSelectedDeals([]); if (collectionName === 'payments') setSelectedPayments([]); setBulkDeleteConfig(null); } catch (e) { console.error("Erro ao excluir em massa:", e); } };
-    const handleImport = async (file, collectionName) => { if (!file || !db) return; const partnersMap = new Map(partners.map(p => [p.name.toLowerCase(), p.id])); return new Promise((resolve, reject) => { window.Papa.parse(file, { header: true, skipEmptyLines: true, complete: async (res) => { const batch = writeBatch(db); const colRef = collection(db, `artifacts/${appId}/public/data/${collectionName}`); let s = 0, f = 0; res.data.forEach(item => { const pId = partnersMap.get(item.partnerName?.toLowerCase()); if (pId) { const newDoc = doc(colRef); let data = { partnerId: pId, partnerName: item.partnerName, createdAt: serverTimestamp() }; if (collectionName === 'payments') { data.clientName = item.clientName; data.paymentValue = parseBrazilianCurrency(item.paymentValue); data.paymentDate = Timestamp.fromDate(new Date(item.paymentDate.split(' ')[0])); } batch.set(newDoc, data); s++; } else { f++; } }); try { await batch.commit(); resolve({ successfulImports: s, failedImports: f }); } catch (e) { reject(e); } }, error: (e) => reject(e) }); }); };
+    
+    const handleImport = async (file, collectionName) => {
+        if (!file || !db) return;
+        const partnersMap = new Map(partners.map(p => [p.name.toLowerCase(), p.id]));
+        
+        return new Promise((resolve, reject) => {
+            window.Papa.parse(file, {
+                header: true,
+                skipEmptyLines: true,
+                complete: async (results) => {
+                    const itemsToImport = results.data;
+                    const batch = writeBatch(db);
+                    const colRef = collection(db, `artifacts/${appId}/public/data/${collectionName}`);
+                    let successfulImports = 0, failedImports = 0;
+
+                    itemsToImport.forEach(item => {
+                        const newDoc = doc(colRef);
+                        let dataToSet = { createdAt: serverTimestamp() };
+                        let isValid = false;
+
+                        if (collectionName === 'partners' && item.name && item.type && item.contactName && item.contactEmail) {
+                            dataToSet = { ...dataToSet, name: item.name, type: item.type, contactName: item.contactName, contactEmail: item.contactEmail };
+                            isValid = true;
+                        } else if (collectionName === 'deals' && item.partnerName && item.clientName && item.value && item.status && item.submissionDate) {
+                            const partnerId = partnersMap.get(item.partnerName.toLowerCase());
+                            if (partnerId) {
+                                dataToSet = { ...dataToSet, partnerId, partnerName: item.partnerName, clientName: item.clientName, value: parseBrazilianCurrency(item.value), status: item.status, submissionDate: Timestamp.fromDate(new Date(item.submissionDate.split(' ')[0])) };
+                                isValid = true;
+                            }
+                        } else if (collectionName === 'payments' && item.partnerName && item.clientName && item.paymentValue && item.paymentDate) {
+                            const partnerId = partnersMap.get(item.partnerName.toLowerCase());
+                            if (partnerId) {
+                                dataToSet = { ...dataToSet, partnerId, partnerName: item.partnerName, clientName: item.clientName, paymentValue: parseBrazilianCurrency(item.paymentValue), paymentDate: Timestamp.fromDate(new Date(item.paymentDate.split(' ')[0])) };
+                                isValid = true;
+                            }
+                        }
+                        
+                        if(isValid) {
+                            batch.set(newDoc, dataToSet);
+                            successfulImports++;
+                        } else {
+                            failedImports++;
+                        }
+                    });
+
+                    try {
+                        await batch.commit();
+                        resolve({ successfulImports, failedImports });
+                    } catch (e) { reject(e); }
+                },
+                error: (e) => reject(e)
+            });
+        });
+    };
 
     return (
         <div className="flex h-screen bg-gray-50 font-sans">
@@ -228,7 +263,7 @@ function PrmApp({ auth }) {
                     </Routes>
                 </div>
             </main>
-            {isModalOpen && <Modal closeModal={closeModal} modalType={modalType} handleAdd={handleAdd} handleUpdate={handleUpdate} handleImport={(file) => handleImport(file, 'payments')} partners={partners} initialData={itemToEdit} />}
+            {isModalOpen && <Modal closeModal={closeModal} modalType={modalType} handleAdd={handleAdd} handleUpdate={handleUpdate} handleImport={handleImport} partners={partners} initialData={itemToEdit} />}
             {itemToDelete && <ConfirmationModal onConfirm={confirmDelete} onCancel={() => setItemToDelete(null)} />}
             {bulkDeleteConfig && <ConfirmationModal onConfirm={confirmBulkDelete} onCancel={() => setBulkDeleteConfig(null)} title={bulkDeleteConfig.title} message={bulkDeleteConfig.message} />}
         </div>
@@ -270,7 +305,7 @@ const Sidebar = ({ auth }) => {
     const location = useLocation();
     const handleLogout = () => signOut(auth);
     const navItems = [ { path: '/', label: 'Dashboard', icon: LayoutDashboard }, { path: '/partners', label: 'Parceiros', icon: Users }, { path: '/deals', label: 'Oportunidades', icon: Briefcase }, { path: '/commissioning', label: 'Comissionamento', icon: BadgePercent }, { path: '/resources', label: 'Recursos', icon: Book }, { path: '/nurturing', label: 'Nutrição', icon: Lightbulb }, ];
-    return ( <aside className="w-16 sm:w-64 bg-slate-800 text-white flex flex-col"><div className="h-16 flex items-center justify-center sm:justify-start sm:px-4 border-b border-slate-700"><DrivaLogoNegativa /></div><nav className="flex-1 mt-6"><ul>{navItems.map(item => (<li key={item.path} className="px-3 sm:px-6 py-1"><Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname.startsWith(item.path) && item.path !== '/' || location.pathname === item.path ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}><item.icon className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">{item.label}</span></Link></li>))}</ul></nav><div className="p-4 border-t border-slate-700"><button onClick={handleLogout} className="w-full flex items-center p-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white"><LogOut className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">Sair</span></button></div></aside> );
+    return ( <aside className="w-16 sm:w-64 bg-slate-800 text-white flex flex-col"><div className="h-16 flex items-center justify-center sm:justify-start sm:px-4 border-b border-slate-700"><img src="/logo-driva-negativa.png" alt="Logo Driva" className="h-8" /></div><nav className="flex-1 mt-6"><ul>{navItems.map(item => (<li key={item.path} className="px-3 sm:px-6 py-1"><Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname.startsWith(item.path) && item.path !== '/' || location.pathname === item.path ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}><item.icon className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">{item.label}</span></Link></li>))}</ul></nav><div className="p-4 border-t border-slate-700"><button onClick={handleLogout} className="w-full flex items-center p-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white"><LogOut className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">Sair</span></button></div></aside> );
 };
 
 const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selectedDealsCount, onBulkDeleteDeals, selectedPaymentsCount, onBulkDeletePayments }) => {
@@ -285,7 +320,9 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
             <div className="flex flex-wrap justify-between items-center gap-4">
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">{currentTitle}</h1>
                 <div className="flex items-center gap-2">
+                    {location.pathname === '/partners' && (<button onClick={() => openModal('importPartners')} className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Parceiros</span></button>)}
                     {location.pathname === '/deals' && selectedDealsCount > 0 && (<button onClick={onBulkDeleteDeals} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDealsCount})</span></button>)}
+                    {location.pathname === '/deals' && (<button onClick={() => openModal('importDeals')} className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Oportunidades</span></button>)}
                     {location.pathname === '/commissioning' && selectedPaymentsCount > 0 && (<button onClick={onBulkDeletePayments} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedPaymentsCount})</span></button>)}
                     {location.pathname === '/commissioning' && (<button onClick={() => openModal('importPayments')} className="flex items-center bg-green-500 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-green-600"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Pagamentos</span></button>)}
                     {buttonInfo[location.pathname] && (<button onClick={() => buttonInfo[location.pathname].action()} className="flex items-center bg-sky-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-sky-600"><Plus className="h-5 w-5 mr-2" /><span className="font-semibold">{buttonInfo[location.pathname].label}</span></button>)}
@@ -449,11 +486,13 @@ const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, p
             case 'resource': return <ResourceForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'nurturing': return <NurturingForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'activity': return <ActivityForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
-            case 'importPayments': return <ImportPaymentsForm onSubmit={handleImport} closeModal={closeModal} />;
+            case 'importPayments': return <ImportPaymentsForm onSubmit={(file) => handleImport(file, 'payments')} closeModal={closeModal} />;
+            case 'importPartners': return <ImportForm collectionName="partners" onSubmit={handleImport} closeModal={closeModal} />;
+            case 'importDeals': return <ImportForm collectionName="deals" onSubmit={handleImport} closeModal={closeModal} />;
             default: return null;
         }
     };
-    const titles = { partner: isEditMode ? 'Editar Parceiro' : 'Adicionar Parceiro', deal: isEditMode ? 'Editar Oportunidade' : 'Registrar Oportunidade', resource: isEditMode ? 'Editar Recurso' : 'Adicionar Recurso', nurturing: isEditMode ? 'Editar Conteúdo' : 'Adicionar Conteúdo', activity: isEditMode ? 'Editar Atividade' : 'Adicionar Atividade', importPayments: 'Importar Planilha de Pagamentos' };
+    const titles = { partner: isEditMode ? 'Editar Parceiro' : 'Adicionar Parceiro', deal: isEditMode ? 'Editar Oportunidade' : 'Registrar Oportunidade', resource: isEditMode ? 'Editar Recurso' : 'Adicionar Recurso', nurturing: isEditMode ? 'Editar Conteúdo' : 'Adicionar Conteúdo', activity: isEditMode ? 'Editar Atividade' : 'Adicionar Atividade', importPayments: 'Importar Planilha de Pagamentos', importPartners: 'Importar Planilha de Parceiros', importDeals: 'Importar Planilha de Oportunidades' };
     return (<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-lg"><div className="flex justify-between items-center p-4 border-b"><h2 className="text-xl font-bold text-slate-800">{titles[modalType]}</h2><button onClick={closeModal} className="text-gray-400 hover:text-gray-600"><X className="h-6 w-6" /></button></div><div className="p-6">{renderForm()}</div></div></div>);
 };
 
@@ -508,6 +547,42 @@ const ImportPaymentsForm = ({ onSubmit, closeModal }) => {
     };
     return (<form onSubmit={handleSubmit} className="space-y-4"><div><label htmlFor="csv-upload" className="block text-sm font-medium text-gray-700 mb-2">Selecione um arquivo .csv</label><p className="text-xs text-gray-500 mb-2">A planilha deve conter: <code className="bg-gray-100 p-1 rounded">clientName</code>, <code className="bg-gray-100 p-1 rounded">partnerName</code>, <code className="bg-gray-100 p-1 rounded">paymentValue</code>, e <code className="bg-gray-100 p-1 rounded">paymentDate</code> (AAAA-MM-DD).</p><input id="csv-upload" type="file" accept=".csv" onChange={(e) => setFile(e.target.files[0])} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100"/></div>{importStatus && <p className="text-sm text-center font-medium text-gray-600">{importStatus}</p>}<FormButton disabled={isImporting || !file}>{isImporting ? 'Importando...' : 'Iniciar Importação'}</FormButton></form>);
 };
+
+const ImportForm = ({ collectionName, onSubmit, closeModal }) => {
+    const [file, setFile] = useState(null);
+    const [isImporting, setIsImporting] = useState(false);
+    const [importStatus, setImportStatus] = useState('');
+
+    const instructions = {
+        partners: 'A planilha deve conter: name, type, contactName, contactEmail.',
+        deals: 'A planilha deve conter: partnerName, clientName, value, status, submissionDate (AAAA-MM-DD).'
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!file) { setImportStatus('Por favor, selecione um arquivo .csv'); return; }
+        setIsImporting(true); setImportStatus('Importando...');
+        try {
+            const { successfulImports, failedImports } = await onSubmit(file, collectionName);
+            setImportStatus(`${successfulImports} itens importados. ${failedImports} falharam.`);
+            setTimeout(() => closeModal(), 3000);
+        } catch (error) { setImportStatus('Ocorreu um erro durante a importação.'); console.error(error); } 
+        finally { setIsImporting(false); }
+    };
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+                <label htmlFor="csv-upload" className="block text-sm font-medium text-gray-700 mb-2">Selecione um arquivo .csv</label>
+                <p className="text-xs text-gray-500 mb-2">{instructions[collectionName]}</p>
+                <input id="csv-upload" type="file" accept=".csv" onChange={(e) => setFile(e.target.files[0])} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100"/>
+            </div>
+            {importStatus && <p className="text-sm text-center font-medium text-gray-600">{importStatus}</p>}
+            <FormButton disabled={isImporting || !file}>{isImporting ? 'Importando...' : 'Iniciar Importação'}</FormButton>
+        </form>
+    );
+};
+
 
 const ActivityForm = ({ onSubmit, initialData }) => {
     const isEditMode = !!initialData?.id;
