@@ -23,7 +23,6 @@ import {
     updateDoc,
     deleteDoc,
     orderBy,
-    where,
     getDocs
 } from 'firebase/firestore';
 import { 
@@ -47,21 +46,29 @@ const appId = process.env.REACT_APP_FIREBASE_PROJECT_ID || 'prm-driva-default';
 
 // --- Funções Utilitárias ---
 const formatCurrency = (value) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+    const numberValue = Number(value);
+    if (isNaN(numberValue)) return 'R$ 0,00';
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numberValue);
 };
 
 const parseBrazilianCurrency = (value) => {
-    if (typeof value !== 'string') return parseFloat(value) || 0;
-    return parseFloat(value.replace(/\./g, '').replace(',', '.')) || 0;
+    if (typeof value === 'number') return value;
+    if (typeof value !== 'string') return 0;
+    const numberString = value.replace(/\./g, '').replace(',', '.');
+    return parseFloat(numberString) || 0;
 };
 
 const parseDateString = (dateString) => {
     if (!dateString) return null;
     try {
         const datePart = dateString.trim().split(' ')[0];
-        const [year, month, day] = datePart.split('-').map(Number);
-        if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
-        const date = new Date(year, month - 1, day);
+        const parts = datePart.split(/[-/]/);
+        if (parts.length !== 3) return null;
+        // Assume AAAA-MM-DD or DD/MM/AAAA
+        const year = parts[0].length === 4 ? parts[0] : parts[2];
+        const month = parts[1];
+        const day = parts[0].length === 4 ? parts[2] : parts[0];
+        const date = new Date(`${year}-${month}-${day}T12:00:00Z`); // Use T12:00:00Z to avoid timezone issues
         if (isNaN(date.getTime())) return null;
         return Timestamp.fromDate(date);
     } catch (e) {
@@ -70,24 +77,31 @@ const parseDateString = (dateString) => {
     }
 };
 
+
 // --- Configurações do Programa de Parceria Driva ---
 const TIER_THRESHOLDS = {
-    FINDER: { DIAMANTE: 30001, OURO: 5001 },
-    SELLER: { DIAMANTE: 20001, OURO: 5001 },
+    FINDER: { DIAMANTE: 30000, OURO: 5000 },
+    SELLER: { DIAMANTE: 20000, OURO: 5000 },
     PRATA_MIN: 499,
 };
+
 const TIER_CONFIG = {
     DIAMANTE: { name: 'Diamante', icon: Gem, color: 'text-cyan-500', bgColor: 'bg-cyan-100', commission: { FINDER: 15, SELLER: 25 } },
     OURO: { name: 'Ouro', icon: Trophy, color: 'text-amber-500', bgColor: 'bg-amber-100', commission: { FINDER: 10, SELLER: 20 } },
     PRATA: { name: 'Prata', icon: Star, color: 'text-gray-500', bgColor: 'bg-gray-100', commission: { FINDER: 5, SELLER: 15 } },
 };
-const getPartnerDetails = (paymentsReceived, type) => {
-    const thresholds = TIER_THRESHOLDS[type];
-    if (paymentsReceived >= thresholds.DIAMANTE) return { ...TIER_CONFIG.DIAMANTE, commissionRate: TIER_CONFIG.DIAMANTE.commission[type] };
-    if (paymentsReceived >= thresholds.OURO) return { ...TIER_CONFIG.OURO, commissionRate: TIER_CONFIG.OURO.commission[type] };
-    if (paymentsReceived >= TIER_THRESHOLDS.PRATA_MIN) return { ...TIER_CONFIG.PRATA, commissionRate: TIER_CONFIG.PRATA.commission[type] };
+
+const getPartnerTierDetails = (paymentsReceived, type) => {
+    const partnerType = type?.toUpperCase() || 'FINDER';
+    const thresholds = TIER_THRESHOLDS[partnerType];
+    
+    if (paymentsReceived > thresholds.DIAMANTE) return { ...TIER_CONFIG.DIAMANTE, commissionRate: TIER_CONFIG.DIAMANTE.commission[partnerType] };
+    if (paymentsReceived > thresholds.OURO) return { ...TIER_CONFIG.OURO, commissionRate: TIER_CONFIG.OURO.commission[partnerType] };
+    if (paymentsReceived >= TIER_THRESHOLDS.PRATA_MIN) return { ...TIER_CONFIG.PRATA, commissionRate: TIER_CONFIG.PRATA.commission[partnerType] };
+    
     return { name: 'N/A', icon: Users, color: 'text-slate-400', bgColor: 'bg-slate-100', commissionRate: 0 };
 };
+
 
 // --- Componente de Login ---
 const LoginPage = ({ auth }) => {
@@ -222,7 +236,7 @@ function PrmApp({ auth }) {
             const wonDealsCount = partnerDeals.filter(d => d.status === 'Ganho').length;
             const conversionRate = partnerDeals.length > 0 ? (wonDealsCount / partnerDeals.length) * 100 : 0;
             const type = partner.type || 'Finder';
-            const tierDetails = getPartnerDetails(paymentsReceived, type);
+            const tierDetails = getPartnerTierDetails(paymentsReceived, type);
             const commissionToPay = paymentsReceived * (tierDetails.commissionRate / 100);
             
             return { ...partner, paymentsReceived, tier: tierDetails, totalOpportunitiesValue, conversionRate, commissionToPay, generatedRevenue };
@@ -237,10 +251,15 @@ function PrmApp({ auth }) {
         if (!db) return;
         try {
             const path = `artifacts/${appId}/public/data/${collectionName}`;
-            const dataWithTs = { ...data, createdAt: serverTimestamp() };
+            let dataWithTs = { ...data, createdAt: serverTimestamp() };
+
             if (data.submissionDate) {
                 dataWithTs.submissionDate = parseDateString(data.submissionDate);
             }
+             if (collectionName === 'activities') {
+                dataWithTs = { ...data, createdAt: serverTimestamp() }
+            }
+            
             await addDoc(collection(db, path), dataWithTs);
             closeModal();
         } catch (e) { console.error("Erro ao adicionar:", e); }
@@ -253,6 +272,9 @@ function PrmApp({ auth }) {
             const dataToUpdate = {...data};
             if (data.submissionDate) {
                 dataToUpdate.submissionDate = parseDateString(data.submissionDate);
+            }
+            if (collectionName === 'activities') {
+                 dataToUpdate.updatedAt = serverTimestamp();
             }
             await updateDoc(docRef, dataToUpdate);
             closeModal();
@@ -324,10 +346,10 @@ function PrmApp({ auth }) {
                                 isValid = true;
                             }
                         } else if (collectionName === 'deals') {
-                            // When importing deals, a partner must be selected in the UI
-                            if (selectedPartnerIdForDeals && item.clientName && item.value && item.status && item.submissionDate) {
-                                const partnerName = partners.find(p => p.id === selectedPartnerIdForDeals)?.name || 'Desconhecido';
-                                dataToSet = { ...dataToSet, partnerId: selectedPartnerIdForDeals, partnerName: partnerName, clientName: item.clientName.trim(), value: parseBrazilianCurrency(item.value), status: item.status.trim(), submissionDate: parseDateString(item.submissionDate) };
+                            const partnerIdToUse = selectedPartnerIdForDeals;
+                            if (partnerIdToUse && item.clientName && item.value && item.status && item.submissionDate) {
+                                const partnerName = partners.find(p => p.id === partnerIdToUse)?.name || 'Desconhecido';
+                                dataToSet = { ...dataToSet, partnerId: partnerIdToUse, partnerName: partnerName, clientName: item.clientName.trim(), value: parseBrazilianCurrency(item.value), status: item.status.trim(), submissionDate: parseDateString(item.submissionDate) };
                                 isValid = !!dataToSet.submissionDate;
                             }
                         } else if (collectionName === 'payments') {
@@ -360,7 +382,6 @@ function PrmApp({ auth }) {
         });
     };
     
-
     return (
         <div className="flex h-screen bg-gray-50 font-sans">
             <Sidebar auth={auth} />
@@ -542,7 +563,7 @@ const Dashboard = ({ partners, deals, recentActivities, onEdit, onDelete }) => {
             </div>
             <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-md">
                 <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><TrendingUp className="mr-2"/>Atividades Recentes</h2>
-                <ActivityFeed activities={recentActivities} onEdit={onEdit} onDelete={(id) => onDelete('activities', id)} />
+                <ActivityFeed activities={recentActivities} onEdit={onEdit} onDelete={onDelete} />
             </div>
         </div> 
     );
@@ -595,7 +616,7 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
                             <td className="p-4 text-slate-600 font-medium">{formatCurrency(p.paymentsReceived)}</td>
                             <td className="p-4 text-slate-600 font-medium">{formatCurrency(p.generatedRevenue)}</td>
                             <td className="p-4 text-green-600 font-bold">{formatCurrency(p.commissionToPay)}</td>
-                            <td className="p-4 relative" onClick={(e) => e.stopPropagation()}><ActionsMenu onEdit={() => onEdit(p)} onDelete={() => onDelete('partners', p.id)} /></td>
+                            <td className="p-4 relative" onClick={(e) => e.stopPropagation()}><ActionsMenu onEdit={() => onEdit('partner', p)} onDelete={() => onDelete('partners', p.id)} /></td>
                         </tr>
                     ))}
                 </tbody>
@@ -721,8 +742,8 @@ const CommissioningList = ({ payments, partners, openModal, selectedPayments, se
     );
 };
 
-const ResourceHub = ({ resources, onEdit, onDelete }) => ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{resources.map(r => (<div key={r.id} className="bg-white p-6 rounded-xl shadow-md flex flex-col relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(r)} onDelete={() => onDelete('resources', r.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{r.title}</h3><p className="text-slate-600 mt-2 flex-grow">{r.description}</p><div className="mt-4 flex justify-between items-center"><span className="text-sm font-semibold bg-sky-100 text-sky-800 px-2 py-1 rounded-full">{r.category}</span><a href={r.url} target="_blank" rel="noopener noreferrer" className="font-bold text-sky-500 hover:text-sky-600">Aceder</a></div></div>))}{resources.length === 0 && <p className="p-4 text-center text-gray-500 col-span-full">Nenhum recurso disponível.</p>}</div>);
-const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => ( <div className="space-y-6">{nurturingContent.map(item => (<div key={item.id} className="bg-white p-6 rounded-xl shadow-md relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(item)} onDelete={() => onDelete('nurturing', item.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{item.title}</h3><p className="text-sm text-gray-500 mt-1">{item.createdAt?.toDate().toLocaleDateString('pt-BR') || ''}</p><p className="text-slate-600 mt-4 whitespace-pre-wrap">{item.content}</p></div>))}{nurturingContent.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum conteúdo de nutrição publicado.</p>}</div>);
+const ResourceHub = ({ resources, onEdit, onDelete }) => ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{resources.map(r => (<div key={r.id} className="bg-white p-6 rounded-xl shadow-md flex flex-col relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit('resource', r)} onDelete={() => onDelete('resources', r.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{r.title}</h3><p className="text-slate-600 mt-2 flex-grow">{r.description}</p><div className="mt-4 flex justify-between items-center"><span className="text-sm font-semibold bg-sky-100 text-sky-800 px-2 py-1 rounded-full">{r.category}</span><a href={r.url} target="_blank" rel="noopener noreferrer" className="font-bold text-sky-500 hover:text-sky-600">Aceder</a></div></div>))}{resources.length === 0 && <p className="p-4 text-center text-gray-500 col-span-full">Nenhum recurso disponível.</p>}</div>);
+const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => ( <div className="space-y-6">{nurturingContent.map(item => (<div key={item.id} className="bg-white p-6 rounded-xl shadow-md relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit('nurturing', item)} onDelete={() => onDelete('nurturing', item.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{item.title}</h3><p className="text-sm text-gray-500 mt-1">{item.createdAt?.toDate().toLocaleDateString('pt-BR') || ''}</p><p className="text-slate-600 mt-4 whitespace-pre-wrap">{item.content}</p></div>))}{nurturingContent.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum conteúdo de nutrição publicado.</p>}</div>);
 
 // --- Componentes Genéricos ---
 const ActionsMenu = ({ onEdit, onDelete }) => {
@@ -847,6 +868,7 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
 
 
 const ActivityForm = ({ onSubmit, initialData }) => {
+    // initialData in "add" mode is the partner object, in "edit" mode is the activity object.
     const isEditMode = initialData?.hasOwnProperty('description'); 
     
     const [formData, setFormData] = useState({ 
@@ -863,6 +885,10 @@ const ActivityForm = ({ onSubmit, initialData }) => {
             const dataToUpdate = {
                 type: formData.type,
                 description: formData.description,
+                 // Preserva os dados originais que não são editados no formulário
+                partnerId: initialData.partnerId,
+                partnerName: initialData.partnerName,
+                createdAt: initialData.createdAt
             };
             onSubmit('activities', initialData.id, dataToUpdate);
         } else {
@@ -926,4 +952,52 @@ const ActivityFeed = ({ activities, onEdit, onDelete }) => {
         </div>
     );
 };
+
+// --- Componente de Aplicação Principal (Wrapper) ---
+const App = () => {
+    const [authInstance, setAuthInstance] = useState(null);
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js';
+        script.async = true;
+        document.head.appendChild(script);
+
+        try {
+            if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                setAuthInstance(auth);
+                const unsubscribe = onAuthStateChanged(auth, (user) => {
+                    setUser(user);
+                    setLoading(false);
+                });
+                return () => {
+                    unsubscribe();
+                    if (document.head.contains(script)) {
+                        document.head.removeChild(script);
+                    }
+                };
+            } else {
+                console.error("Firebase config is missing!");
+                setLoading(false);
+            }
+        } catch (error) {
+            console.error("Erro na inicialização do Firebase:", error);
+            setLoading(false);
+        }
+    }, []);
+
+    if (loading) {
+        return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-semibold text-gray-700">A carregar...</div></div>;
+    }
+    
+    if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+        return <div className="flex items-center justify-center h-screen bg-red-50 text-red-800 p-8"><div className="text-center"><h2 className="text-2xl font-bold mb-4">Erro de Configuração</h2><p>As chaves do Firebase não foram encontradas. Verifique as variáveis de ambiente.</p></div></div>;
+    }
+
+    return user ? <PrmApp auth={authInstance} /> : <LoginPage auth={authInstance} />;
+}
 
