@@ -160,17 +160,24 @@ function PrmApp({ auth }) {
     // --- Efeito para Carregar Dados do Firestore ---
     useEffect(() => {
         if (!db) return;
-        const collections = { 
-            partners: setPartners, 
-            deals: setDeals, 
-            resources: setResources, 
-            nurturing: setNurturingContent, 
-            payments: setPayments, 
-            activities: setActivities 
+        const collectionsConfig = { 
+            partners: { setter: setPartners }, 
+            deals: { setter: setDeals }, 
+            resources: { setter: setResources }, 
+            nurturing: { setter: setNurturingContent }, 
+            payments: { setter: setPayments }, 
+            activities: { setter: setActivities, orderByField: 'createdAt' }
         };
-        const unsubscribers = Object.entries(collections).map(([col, setter]) => {
-            const q = query(collection(db, `artifacts/${appId}/public/data/${col}`), orderBy('createdAt', 'desc'));
-            return onSnapshot(q, (snapshot) => setter(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))), (error) => console.error(`Erro ao carregar ${col}:`, error));
+        const unsubscribers = Object.entries(collectionsConfig).map(([col, config]) => {
+            const collectionPath = `artifacts/${appId}/public/data/${col}`;
+            const q = config.orderByField 
+                ? query(collection(db, collectionPath), orderBy(config.orderByField, 'desc'))
+                : query(collection(db, collectionPath));
+            
+            return onSnapshot(q, (snapshot) => {
+                const dataList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                config.setter(dataList);
+            }, (error) => console.error(`Erro ao carregar ${col}:`, error));
         });
         return () => unsubscribers.forEach(unsub => unsub());
     }, [db]);
@@ -180,20 +187,29 @@ function PrmApp({ auth }) {
         if (!startDate && !endDate) return deals;
         const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
         const end = endDate ? new Date(`${endDate}T23:59:59`) : null;
-        return deals.filter(deal => { const dealDate = deal.submissionDate?.toDate(); return dealDate && (!start || dealDate >= start) && (!end || dealDate <= end); });
+        return deals.filter(deal => { 
+            if (!deal.submissionDate?.toDate) return false;
+            const dealDate = deal.submissionDate.toDate(); 
+            return dealDate && (!start || dealDate >= start) && (!end || dealDate <= end); 
+        });
     }, [deals, startDate, endDate]);
     
     const filteredPayments = useMemo(() => {
         if (!startDate && !endDate) return payments;
         const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
         const end = endDate ? new Date(`${endDate}T23:59:59`) : null;
-        return payments.filter(payment => { const paymentDate = payment.paymentDate?.toDate(); return paymentDate && (!start || paymentDate >= start) && (!end || paymentDate <= end); });
+        return payments.filter(payment => { 
+             if (!payment.paymentDate?.toDate) return false;
+            const paymentDate = payment.paymentDate.toDate(); 
+            return paymentDate && (!start || paymentDate >= start) && (!end || paymentDate <= end); 
+        });
     }, [payments, startDate, endDate]);
 
     // --- Cálculo de Dados Derivados ---
     const partnersWithDetails = useMemo(() => {
         const paymentsByPartner = filteredPayments.reduce((acc, p) => { acc[p.partnerId] = (acc[p.partnerId] || 0) + (parseBrazilianCurrency(p.paymentValue) || 0); return acc; }, {});
         const dealsByPartner = filteredDeals.reduce((acc, d) => { if (!acc[d.partnerId]) acc[d.partnerId] = []; acc[d.partnerId].push(d); return acc; }, {});
+        
         return partners.map(partner => {
             const paymentsReceived = paymentsByPartner[partner.id] || 0;
             const partnerDeals = dealsByPartner[partner.id] || [];
@@ -204,6 +220,7 @@ function PrmApp({ auth }) {
             const type = partner.type || 'Finder';
             const tierDetails = getPartnerDetails(paymentsReceived, type);
             const commissionToPay = paymentsReceived * (tierDetails.commissionRate / 100);
+            
             return { ...partner, paymentsReceived, tier: tierDetails, totalOpportunitiesValue, conversionRate, commissionToPay, generatedRevenue };
         });
     }, [partners, filteredDeals, filteredPayments]);
@@ -211,65 +228,128 @@ function PrmApp({ auth }) {
     // --- Funções de CRUD ---
     const openModal = (type, data = null) => { setModalType(type); setItemToEdit(data); setIsModalOpen(true); };
     const closeModal = () => { setIsModalOpen(false); setModalType(''); setItemToEdit(null); };
-    const handleAdd = async (collectionName, data) => { if (!db) return; try { const path = `artifacts/${appId}/public/data/${collectionName}`; const dataWithTs = { ...data, createdAt: serverTimestamp() }; if (collectionName === 'deals' && data.submissionDate) dataWithTs.submissionDate = Timestamp.fromDate(new Date(data.submissionDate)); await addDoc(collection(db, path), dataWithTs); closeModal(); } catch (e) { console.error("Erro ao adicionar:", e); } };
-    const handleUpdate = async (collectionName, id, data) => { if (!db) return; try { const docRef = doc(db, `artifacts/${appId}/public/data/${collectionName}`, id); const dataToUpdate = {...data}; if (collectionName === 'deals' && data.submissionDate) dataToUpdate.submissionDate = Timestamp.fromDate(new Date(data.submissionDate)); await updateDoc(docRef, dataToUpdate); closeModal(); } catch (e) { console.error("Erro ao atualizar:", e); } };
-    const handleDelete = (collectionName, id) => setItemToDelete({ collectionName, id });
-    const confirmDelete = async () => { if (!db || !itemToDelete) return; try { await deleteDoc(doc(db, `artifacts/${appId}/public/data/${itemToDelete.collectionName}`, itemToDelete.id)); setItemToDelete(null); } catch (e) { console.error("Erro ao excluir:", e); } };
-    const handleBulkDelete = (collectionName, ids) => { if(ids.length > 0) setBulkDeleteConfig({ collectionName, ids, title: `Excluir ${ids.length} itens?`, message: `Tem a certeza de que deseja excluir os ${ids.length} itens selecionados?` }); };
-    const confirmBulkDelete = async () => { if (!db || !bulkDeleteConfig) return; try { const { collectionName, ids } = bulkDeleteConfig; const batch = writeBatch(db); ids.forEach(id => batch.delete(doc(db, `artifacts/${appId}/public/data/${collectionName}`, id))); await batch.commit(); if (collectionName === 'deals') setSelectedDeals([]); if (collectionName === 'payments') setSelectedPayments([]); setBulkDeleteConfig(null); } catch (e) { console.error("Erro ao excluir em massa:", e); } };
+
+    const handleAdd = async (collectionName, data) => {
+        if (!db) return;
+        try {
+            const path = `artifacts/${appId}/public/data/${collectionName}`;
+            const dataWithTs = { ...data, createdAt: serverTimestamp() };
+            if (data.submissionDate) {
+                dataWithTs.submissionDate = parseDateString(data.submissionDate);
+            }
+            await addDoc(collection(db, path), dataWithTs);
+            closeModal();
+        } catch (e) { console.error("Erro ao adicionar:", e); }
+    };
     
-    const handleImport = async (file, collectionName, selectedPartnerId = null) => {
+    const handleUpdate = async (collectionName, id, data) => {
+        if (!db) return;
+        try {
+            const docRef = doc(db, `artifacts/${appId}/public/data/${collectionName}`, id);
+            const dataToUpdate = {...data};
+            if (data.submissionDate) {
+                dataToUpdate.submissionDate = parseDateString(data.submissionDate);
+            }
+            await updateDoc(docRef, dataToUpdate);
+            closeModal();
+        } catch (e) { console.error("Erro ao atualizar:", e); }
+    };
+
+    const handleDelete = (collectionName, id) => setItemToDelete({ collectionName, id });
+
+    const confirmDelete = async () => {
+        if (!db || !itemToDelete) return;
+        try {
+            await deleteDoc(doc(db, `artifacts/${appId}/public/data/${itemToDelete.collectionName}`, itemToDelete.id));
+            setItemToDelete(null);
+        } catch (e) {
+            console.error("Erro ao excluir:", e);
+        }
+    };
+    
+    const handleBulkDelete = (collectionName, ids) => {
+        if(ids.length > 0) setBulkDeleteConfig({ collectionName, ids, title: `Excluir ${ids.length} itens?`, message: `Tem a certeza de que deseja excluir os ${ids.length} itens selecionados?` });
+    };
+
+    const confirmBulkDelete = async () => {
+        if (!db || !bulkDeleteConfig) return;
+        try {
+            const { collectionName, ids } = bulkDeleteConfig;
+            const batch = writeBatch(db);
+            ids.forEach(id => batch.delete(doc(db, `artifacts/${appId}/public/data/${collectionName}`, id)));
+            await batch.commit();
+            if (collectionName === 'deals') setSelectedDeals([]);
+            if (collectionName === 'payments') setSelectedPayments([]);
+            setBulkDeleteConfig(null);
+        } catch (e) { console.error("Erro ao excluir em massa:", e); }
+    };
+    
+     const handleImport = async (file, collectionName, selectedPartnerIdForDeals) => {
         if (!file || !db) return;
-        const partnersMap = new Map(partners.map(p => [p.name.toLowerCase(), p.id]));
-        
+        const partnersSnapshot = await getDocs(query(collection(db, `artifacts/${appId}/public/data/partners`)));
+        const partnersMap = new Map(partnersSnapshot.docs.map(doc => [doc.data().name.toLowerCase(), doc.id]));
+
         return new Promise((resolve, reject) => {
+            if (!window.Papa) {
+                reject(new Error("Biblioteca de parsing de CSV (PapaParse) não carregada."));
+                return;
+            }
             window.Papa.parse(file, {
                 header: true,
                 skipEmptyLines: true,
                 complete: async (results) => {
                     const itemsToImport = results.data;
+                    if (itemsToImport.length === 0) {
+                        resolve({ successfulImports: 0, failedImports: 0 });
+                        return;
+                    }
+
                     const batch = writeBatch(db);
                     const colRef = collection(db, `artifacts/${appId}/public/data/${collectionName}`);
-                    let successfulImports = 0, failedImports = 0;
+                    let successfulImports = 0;
+                    let failedImports = 0;
 
-                    for (const item of itemsToImport) {
-                        const newDoc = doc(colRef);
+                    itemsToImport.forEach((item, index) => {
+                        const newDocRef = doc(colRef);
                         let dataToSet = { createdAt: serverTimestamp() };
                         let isValid = false;
 
-                        if (collectionName === 'partners' && item.name && item.type && item.contactName && item.contactEmail) {
-                            dataToSet = { ...dataToSet, name: item.name, type: item.type, contactName: item.contactName, contactEmail: item.contactEmail };
-                            isValid = true;
-                        } else if (collectionName === 'deals' && item.partnerName && item.clientName && item.value && item.status && item.submissionDate) {
-                            const partnerId = partnersMap.get(item.partnerName.toLowerCase());
-                            if (partnerId) {
-                                dataToSet = { ...dataToSet, partnerId, partnerName: item.partnerName, clientName: item.clientName, value: parseBrazilianCurrency(item.value), status: item.status, submissionDate: parseDateString(item.submissionDate) };
+                        if (collectionName === 'partners') {
+                            if (item.name && item.type && item.contactName && item.contactEmail) {
+                                dataToSet = { ...dataToSet, name: item.name.trim(), type: item.type.trim(), contactName: item.contactName.trim(), contactEmail: item.contactEmail.trim() };
                                 isValid = true;
-                            } else {
-                                console.warn(`Parceiro não encontrado: ${item.partnerName}`);
                             }
-                        } else if (collectionName === 'payments' && item.partnerName && item.clientName && item.paymentValue && item.paymentDate) {
-                            const partnerId = partnersMap.get(item.partnerName.toLowerCase());
-                            if (partnerId) {
-                                dataToSet = { ...dataToSet, partnerId, partnerName: item.partnerName, clientName: item.clientName, paymentValue: parseBrazilianCurrency(item.paymentValue), paymentDate: parseDateString(item.paymentDate) };
-                                isValid = true;
-                            } else {
-                                console.warn(`Parceiro não encontrado: ${item.partnerName}`);
+                        } else if (collectionName === 'deals') {
+                            const partnerIdToUse = selectedPartnerIdForDeals || partnersMap.get(item.partnerName?.trim().toLowerCase());
+                            if (partnerIdToUse && item.clientName && item.value && item.status && item.submissionDate) {
+                                const partnerName = partners.find(p => p.id === partnerIdToUse)?.name || item.partnerName?.trim();
+                                dataToSet = { ...dataToSet, partnerId: partnerIdToUse, partnerName: partnerName, clientName: item.clientName.trim(), value: parseBrazilianCurrency(item.value), status: item.status.trim(), submissionDate: parseDateString(item.submissionDate) };
+                                isValid = !!dataToSet.submissionDate;
+                            }
+                        } else if (collectionName === 'payments') {
+                            const partnerId = partnersMap.get(item.partnerName?.trim().toLowerCase());
+                            if (partnerId && item.clientName && item.paymentValue && item.paymentDate) {
+                                dataToSet = { ...dataToSet, partnerId, partnerName: item.partnerName.trim(), clientName: item.clientName.trim(), paymentValue: parseBrazilianCurrency(item.paymentValue), paymentDate: parseDateString(item.paymentDate) };
+                                isValid = !!dataToSet.paymentDate;
                             }
                         }
                         
-                        if(isValid) {
-                            batch.set(newDoc, dataToSet);
+                        if (isValid) {
+                            batch.set(newDocRef, dataToSet);
                             successfulImports++;
                         } else {
+                            console.warn(`Linha ${index + 2} da planilha ignorada por dados inválidos ou parceiro não encontrado:`, item);
                             failedImports++;
                         }
-                    }
+                    });
 
                     try {
                         await batch.commit();
                         resolve({ successfulImports, failedImports });
-                    } catch (e) { reject(e); }
+                    } catch (e) {
+                        console.error("Erro ao commitar o batch:", e);
+                        reject(e);
+                    }
                 },
                 error: (e) => reject(e)
             });
@@ -296,20 +376,89 @@ function PrmApp({ auth }) {
         <div className="flex h-screen bg-gray-50 font-sans">
             <Sidebar auth={auth} />
             <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-                <Header openModal={openModal} startDate={startDate} endDate={endDate} setStartDate={setStartDate} setEndDate={setEndDate} selectedDealsCount={selectedDeals.length} onBulkDeleteDeals={() => handleBulkDelete('deals', selectedDeals)} selectedPaymentsCount={selectedPayments.length} onBulkDeletePayments={() => handleBulkDelete('payments', selectedPayments)}/>
+                <Header 
+                    openModal={openModal} 
+                    startDate={startDate} 
+                    endDate={endDate} 
+                    setStartDate={setStartDate} 
+                    setEndDate={setEndDate} 
+                    selectedDealsCount={selectedDeals.length} 
+                    onBulkDeleteDeals={() => handleBulkDelete('deals', selectedDeals)} 
+                    selectedPaymentsCount={selectedPayments.length} 
+                    onBulkDeletePayments={() => handleBulkDelete('payments', selectedPayments)}
+                />
                 <div className="mt-6">
                     <Routes>
-                        <Route path="/" element={<Dashboard partners={partnersWithDetails} deals={filteredDeals} recentActivities={activities.slice(0, 5)} onEdit={(activity) => openModal('activity', activity)} onDelete={(id) => handleDelete('activities', id)} />} />
-                        <Route path="/partners" element={<PartnerList partners={partnersWithDetails} onEdit={(p) => openModal('partner', p)} onDelete={(id) => handleDelete('partners', id)} />} />
-                        <Route path="/partners/:partnerId" element={<PartnerDetail allPartners={partnersWithDetails} allActivities={activities} openModal={openModal} handleDeleteActivity={(id) => handleDelete('activities', id)} />} />
-                        <Route path="/deals" element={<DealList deals={filteredDeals} onEdit={(d) => openModal('deal', d)} onDelete={(id) => handleDelete('deals', id)} selectedDeals={selectedDeals} setSelectedDeals={setSelectedDeals} />} />
-                        <Route path="/commissioning" element={<CommissioningList payments={filteredPayments} selectedPayments={selectedPayments} setSelectedPayments={setSelectedPayments} openModal={openModal} />} />
-                        <Route path="/resources" element={<ResourceHub resources={resources} onEdit={(r) => openModal('resource', r)} onDelete={(id) => handleDelete('resources', id)} />} />
-                        <Route path="/nurturing" element={<NurturingHub nurturingContent={nurturingContent} onEdit={(i) => openModal('nurturing', i)} onDelete={(id) => handleDelete('nurturing', id)} />} />
+                        <Route path="/" element={
+                            <Dashboard 
+                                partners={partnersWithDetails} 
+                                deals={filteredDeals} 
+                                recentActivities={activities.slice(0, 5)} 
+                                onEdit={(activity) => openModal('activity', activity)} 
+                                onDelete={(id) => handleDelete('activities', id)} 
+                            />} 
+                        />
+                        <Route path="/partners" element={
+                            <PartnerList 
+                                partners={partnersWithDetails} 
+                                onEdit={(p) => openModal('partner', p)} 
+                                onDelete={handleDelete} 
+                            />} 
+                        />
+                        <Route path="/partners/:partnerId" element={
+                            <PartnerDetail 
+                                allPartners={partnersWithDetails} 
+                                allActivities={activities} 
+                                openModal={openModal} 
+                                handleDeleteActivity={(id) => handleDelete('activities', id)} 
+                            />} 
+                        />
+                        <Route path="/opportunities" element={
+                            <DealList 
+                                deals={filteredDeals} 
+                                partners={partners}
+                                onEdit={(d) => openModal('deal', d)} 
+                                onDelete={(id) => handleDelete('deals', id)} 
+                                selectedDeals={selectedDeals} 
+                                setSelectedDeals={setSelectedDeals} 
+                            />} 
+                        />
+                        <Route path="/commissioning" element={
+                            <CommissioningList 
+                                payments={filteredPayments} 
+                                partners={partners}
+                                openModal={openModal}
+                                selectedPayments={selectedPayments} 
+                                setSelectedPayments={setSelectedPayments} 
+                            />} 
+                        />
+                        <Route path="/resources" element={
+                            <ResourceHub 
+                                resources={resources} 
+                                onEdit={(r) => openModal('resource', r)} 
+                                onDelete={(id) => handleDelete('resources', id)} 
+                            />} 
+                        />
+                        <Route path="/nurturing" element={
+                            <NurturingHub 
+                                nurturingContent={nurturingContent} 
+                                onEdit={(i) => openModal('nurturing', i)} 
+                                onDelete={(id) => handleDelete('nurturing', id)} 
+                            />} 
+                        />
                     </Routes>
                 </div>
             </main>
-            {isModalOpen && <Modal closeModal={closeModal} modalType={modalType} handleAdd={handleAdd} handleUpdate={handleUpdate} handleImport={handleImport} partners={partners} initialData={itemToEdit} handleActivitySubmit={handleActivitySubmit} />}
+            {isModalOpen && <Modal 
+                closeModal={closeModal} 
+                modalType={modalType} 
+                handleAdd={handleAdd} 
+                handleUpdate={handleUpdate} 
+                handleImport={handleImport} 
+                partners={partners} 
+                initialData={itemToEdit} 
+                handleActivitySubmit={handleActivitySubmit} 
+            />}
             {itemToDelete && <ConfirmationModal onConfirm={confirmDelete} onCancel={() => setItemToDelete(null)} />}
             {bulkDeleteConfig && <ConfirmationModal onConfirm={confirmBulkDelete} onCancel={() => setBulkDeleteConfig(null)} title={bulkDeleteConfig.title} message={bulkDeleteConfig.message} />}
         </div>
@@ -363,7 +512,8 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
     const viewTitles = { '/': 'Dashboard de Canais', '/partners': 'Gestão de Parceiros', '/deals': 'Registro de Oportunidades', '/commissioning': 'Cálculo de Comissionamento', '/resources': 'Central de Recursos', '/nurturing': 'Nutrição de Parceiros', detail: 'Detalhes do Parceiro' };
     const currentTitle = isDetailView ? viewTitles.detail : viewTitles[location.pathname];
     const buttonInfo = { '/partners': { label: 'Novo Parceiro', action: () => openModal('partner') }, '/deals': { label: 'Registrar Oportunidade', action: () => openModal('deal') }, '/resources': { label: 'Novo Recurso', action: () => openModal('resource') }, '/nurturing': { label: 'Novo Conteúdo', action: () => openModal('nurturing') }, };
-    const showFilters = ['/', '/partners', '/deals', '/commissioning'].includes(location.pathname) || isDetailView;
+    const showFilters = ['/', '/partners', '/deals', '/commissioning', '/partners/'].some(path => location.pathname.startsWith(path));
+    
     return (
         <div>
             <div className="flex flex-wrap justify-between items-center gap-4">
@@ -395,7 +545,7 @@ const Dashboard = ({ partners, deals, recentActivities, onEdit, onDelete }) => {
         const totalGeneratedRevenue = partners.reduce((sum, p) => sum + p.generatedRevenue, 0);
         return { totalPayments, totalGeneratedRevenue };
     }, [partners]);
-    const stats = [ { title: 'Total de Parceiros', value: partners.length, icon: Users, color: 'text-blue-500' }, { title: 'Oportunidades no Período', value: deals.length, icon: Briefcase, color: 'text-orange-500' }, { title: 'Receita Gerada (Ganhos)', value: `R$ ${totalGeneratedRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Target, color: 'text-indigo-500' }, { title: 'Pagamentos Recebidos', value: `R$ ${totalPayments.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'text-green-500' }, ];
+    const stats = [ { title: 'Total de Parceiros', value: partners.length, icon: Users, color: 'text-blue-500' }, { title: 'Oportunidades no Período', value: deals.length, icon: Briefcase, color: 'text-orange-500' }, { title: 'Receita Gerada (Ganhos)', value: formatCurrency(totalGeneratedRevenue), icon: Target, color: 'text-indigo-500' }, { title: 'Pagamentos Recebidos', value: formatCurrency(totalPayments), icon: DollarSign, color: 'text-green-500' }, ];
     return ( 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
@@ -404,7 +554,7 @@ const Dashboard = ({ partners, deals, recentActivities, onEdit, onDelete }) => {
             </div>
             <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-md">
                 <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><TrendingUp className="mr-2"/>Atividades Recentes</h2>
-                <ActivityFeed activities={recentActivities} onEdit={onEdit} onDelete={onDelete} />
+                <ActivityFeed activities={recentActivities} onEdit={onEdit} onDelete={(id) => onDelete('activities', id)} />
             </div>
         </div> 
     );
@@ -500,7 +650,7 @@ const PartnerDetail = ({ allPartners, allActivities, openModal, handleDeleteActi
     );
 };
 
-const DealList = ({ deals, onEdit, onDelete, selectedDeals, setSelectedDeals, isMini = false }) => {
+const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelectedDeals, isMini = false }) => {
     const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
     
     const [paginatedDeals, PaginatorComponent, currentPage, setCurrentPage] = usePagination(deals);
@@ -511,6 +661,12 @@ const DealList = ({ deals, onEdit, onDelete, selectedDeals, setSelectedDeals, is
     
     const handleSelectAll = (e) => setSelectedDeals(e.target.checked ? paginatedDeals.map(d => d.id) : []);
     const handleSelectOne = (e, id) => setSelectedDeals(e.target.checked ? [...selectedDeals, id] : selectedDeals.filter(dealId => dealId !== id));
+
+    const partnerNameMap = useMemo(() => {
+        const map = {};
+        partners.forEach(p => { map[p.id] = p.name; });
+        return map;
+    }, [partners]);
 
     return (
         <div className={!isMini ? "bg-white rounded-xl shadow-md" : ""}>
@@ -532,7 +688,7 @@ const DealList = ({ deals, onEdit, onDelete, selectedDeals, setSelectedDeals, is
                             {!isMini && <td className="p-4"><input type="checkbox" checked={selectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
                             {!isMini && <td className="p-4 text-slate-600">{d.submissionDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td>}
                             <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
-                            <td className="p-4 text-slate-600">{d.partnerName}</td>
+                            <td className="p-4 text-slate-600">{partnerNameMap[d.partnerId] || d.partnerName || 'Desconhecido'}</td>
                             <td className="p-4 text-slate-600">{formatCurrency(parseBrazilianCurrency(d.value))}</td>
                             <td className="p-4"><span className={`px-2 py-1 rounded-full text-sm font-semibold ${statusColors[d.status] || 'bg-gray-100'}`}>{d.status}</span></td>
                             {!isMini && <td className="p-4 relative"><ActionsMenu onEdit={() => onEdit(d)} onDelete={() => onDelete('deals', d.id)} /></td>}
@@ -546,7 +702,7 @@ const DealList = ({ deals, onEdit, onDelete, selectedDeals, setSelectedDeals, is
     );
 };
 
-const CommissioningList = ({ payments, openModal, selectedPayments, setSelectedPayments }) => {
+const CommissioningList = ({ payments, partners, openModal, selectedPayments, setSelectedPayments }) => {
     const [paginatedPayments, PaginatorComponent, currentPage] = usePagination(payments);
     
     useEffect(() => {
@@ -556,12 +712,18 @@ const CommissioningList = ({ payments, openModal, selectedPayments, setSelectedP
     const handleSelectAll = (e) => setSelectedPayments(e.target.checked ? paginatedPayments.map(p => p.id) : []);
     const handleSelectOne = (e, id) => setSelectedPayments(e.target.checked ? [...selectedPayments, id] : selectedPayments.filter(pId => pId !== id));
 
+    const partnerNameMap = useMemo(() => {
+        const map = {};
+        partners.forEach(p => { map[p.id] = p.name; });
+        return map;
+    }, [partners]);
+
     return (
         <div className="bg-white rounded-xl shadow-md overflow-hidden">
             <div className="overflow-x-auto">
                 <table className="w-full text-left">
                     <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4"><input type="checkbox" onChange={handleSelectAll} checked={paginatedPayments.length > 0 && selectedPayments.length === paginatedPayments.length} className="rounded" /></th><th className="p-4 font-semibold text-slate-600">Data do Pagamento</th><th className="p-4 font-semibold text-slate-600">Cliente Final</th><th className="p-4 font-semibold text-slate-600">Parceiro</th><th className="p-4 font-semibold text-slate-600">Valor Pago</th></tr></thead>
-                    <tbody>{paginatedPayments.map(p => (<tr key={p.id} className={`border-b border-slate-100 ${selectedPayments.includes(p.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}><td className="p-4"><input type="checkbox" checked={selectedPayments.includes(p.id)} onChange={(e) => handleSelectOne(e, p.id)} className="rounded" /></td><td className="p-4 text-slate-600">{p.paymentDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td><td className="p-4 text-slate-800 font-medium">{p.clientName}</td><td className="p-4 text-slate-600">{p.partnerName}</td><td className="p-4 text-slate-600 font-medium">{formatCurrency(parseBrazilianCurrency(p.paymentValue))}</td></tr>))}{payments.length === 0 && <tr><td colSpan="5"><p className="p-4 text-center text-gray-500">Nenhum pagamento encontrado.</p></td></tr>}</tbody>
+                    <tbody>{paginatedPayments.map(p => (<tr key={p.id} className={`border-b border-slate-100 ${selectedPayments.includes(p.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}><td className="p-4"><input type="checkbox" checked={selectedPayments.includes(p.id)} onChange={(e) => handleSelectOne(e, p.id)} className="rounded" /></td><td className="p-4 text-slate-600">{p.paymentDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td><td className="p-4 text-slate-800 font-medium">{p.clientName}</td><td className="p-4 text-slate-600">{partnerNameMap[p.partnerId] || p.partnerName || 'Desconhecido'}</td><td className="p-4 text-slate-600 font-medium">{formatCurrency(parseBrazilianCurrency(p.paymentValue))}</td></tr>))}{payments.length === 0 && <tr><td colSpan="5"><p className="p-4 text-center text-gray-500">Nenhum pagamento encontrado.</p></td></tr>}</tbody>
                 </table>
             </div>
             <PaginatorComponent />
@@ -577,7 +739,7 @@ const ActionsMenu = ({ onEdit, onDelete }) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef(null);
     useEffect(() => { const handleClickOutside = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setIsOpen(false); }; document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside); }, []);
-    return (<div className="relative" ref={menuRef}><button onClick={() => setIsOpen(!isOpen)} className="p-2 rounded-full hover:bg-gray-200"><MoreVertical size={18} /></button>{isOpen && (<div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 border"><button onClick={() => { onEdit(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"><Edit size={16} className="mr-2" /> Editar</button><button onClick={() => { onDelete(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"><Trash2 size={16} className="mr-2" /> Excluir</button></div>)}</div>);
+    return (<div className="relative" ref={menuRef}><button onClick={() => setIsOpen(!isOpen)} className="p-2 rounded-full hover:bg-gray-200"><MoreVertical size={18} /></button>{isOpen && (<div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 border"><button onClick={(e) => { e.stopPropagation(); onEdit(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"><Edit size={16} className="mr-2" /> Editar</button><button onClick={(e) => { e.stopPropagation(); onDelete(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"><Trash2 size={16} className="mr-2" /> Excluir</button></div>)}</div>);
 };
 const ConfirmationModal = ({ onConfirm, onCancel, title = "Confirmar Exclusão", message = "Tem a certeza de que deseja excluir este item? Esta ação não pode ser desfeita." }) => (<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center"><div className="mx-auto bg-red-100 rounded-full h-12 w-12 flex items-center justify-center"><AlertTriangle className="h-6 w-6 text-red-600" /></div><h3 className="text-lg font-medium text-gray-900 mt-4">{title}</h3><p className="text-sm text-gray-500 mt-2">{message}</p><div className="mt-6 flex justify-center gap-4"><button onClick={onCancel} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-semibold">Cancelar</button><button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold">Confirmar Exclusão</button></div></div></div>);
 
@@ -590,8 +752,8 @@ const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, p
             case 'resource': return <ResourceForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'nurturing': return <NurturingForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'activity': return <ActivityForm onSubmit={handleActivitySubmit} initialData={initialData} />;
-            case 'importPayments': return <ImportForm collectionName="payments" onSubmit={handleImport} closeModal={closeModal} />;
-            case 'importPartners': return <ImportForm collectionName="partners" onSubmit={handleImport} closeModal={closeModal} />;
+            case 'importPayments': return <ImportForm collectionName="payments" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
+            case 'importPartners': return <ImportForm collectionName="partners" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importDeals': return <ImportForm collectionName="deals" partners={partners} onSubmit={handleImport} closeModal={closeModal} />;
             default: return null;
         }
@@ -616,8 +778,8 @@ const PartnerForm = ({ onSubmit, initialData }) => {
 const DealForm = ({ onSubmit, partners, initialData }) => {
     const [formData, setFormData] = useState({ clientName: initialData?.clientName || '', partnerId: initialData?.partnerId || '', submissionDate: initialData?.submissionDate?.toDate().toISOString().split('T')[0] || new Date().toISOString().split('T')[0], value: initialData?.value || '', status: initialData?.status || 'Pendente' });
     const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    const handleSubmit = (e) => { e.preventDefault(); const selectedPartner = partners.find(p => p.id === formData.partnerId); const dataToSubmit = { ...formData, partnerName: selectedPartner ? selectedPartner.name : 'N/A' }; if (initialData) onSubmit('deals', initialData.id, dataToSubmit); else onSubmit('deals', dataToSubmit); };
-    return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="clientName" name="clientName" label="Nome do Cliente Final" value={formData.clientName} onChange={handleChange} required /><FormSelect id="partnerId" name="partnerId" label="Parceiro Responsável" value={formData.partnerId} onChange={handleChange} required><option value="">Selecione um parceiro</option>{partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</FormSelect><FormInput id="submissionDate" name="submissionDate" label="Data da Indicação" type="date" value={formData.submissionDate} onChange={handleChange} required /><FormInput id="value" name="value" label="Valor Estimado (R$)" type="text" value={formData.value} onChange={handleChange} required /><FormSelect id="status" name="status" label="Status" value={formData.status} onChange={handleChange} required><option>Pendente</option><option>Aprovado</option><option>Ganho</option><option>Perdido</option></FormSelect><FormButton>{initialData ? 'Salvar Alterações' : 'Registrar Oportunidade'}</FormButton></form>);
+    const handleSubmit = (e) => { e.preventDefault(); const selectedPartner = partners.find(p => p.id === formData.partnerId); const dataToSubmit = { ...formData, value: parseBrazilianCurrency(formData.value), partnerName: selectedPartner ? selectedPartner.name : 'N/A' }; if (initialData) onSubmit('deals', initialData.id, dataToSubmit); else onSubmit('deals', dataToSubmit); };
+    return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="clientName" name="clientName" label="Nome do Cliente Final" value={formData.clientName} onChange={handleChange} required /><FormSelect id="partnerId" name="partnerId" label="Parceiro Responsável" value={formData.partnerId} onChange={handleChange} required><option value="">Selecione um parceiro</option>{partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</FormSelect><FormInput id="submissionDate" name="submissionDate" label="Data da Indicação" type="date" value={formData.submissionDate} onChange={handleChange} required /><FormInput id="value" name="value" label="Valor Estimado (R$)" type="text" value={formData.value} onChange={handleChange} required placeholder="Ex: 1.250,50" /><FormSelect id="status" name="status" label="Status" value={formData.status} onChange={handleChange} required><option>Pendente</option><option>Aprovado</option><option>Ganho</option><option>Perdido</option></FormSelect><FormButton>{initialData ? 'Salvar Alterações' : 'Registrar Oportunidade'}</FormButton></form>);
 };
 
 const ResourceForm = ({ onSubmit, initialData }) => {
@@ -649,6 +811,10 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!file) { setImportStatus('Por favor, selecione um arquivo .csv'); return; }
+        if (collectionName === 'deals' && !selectedPartnerId) {
+             setImportStatus('Por favor, selecione um parceiro para associar as oportunidades.');
+             return;
+        }
         setIsImporting(true); setImportStatus('Importando...');
         try {
             const { successfulImports, failedImports } = await onSubmit(file, collectionName, selectedPartnerId);
@@ -658,14 +824,13 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
         finally { setIsImporting(false); }
     };
     
-    // Oportunidades agora tem um seletor de parceiro, unificando a lógica
     const requiresPartnerSelection = collectionName === 'deals';
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <p className="text-sm text-gray-600">{instructions[collectionName]}</p>
             
-            {requiresPartnerSelection && (
+            {requiresPartnerSelection && partners?.length > 0 && (
                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Associar a qual parceiro?</label>
                      <select 
@@ -692,7 +857,9 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
 
 
 const ActivityForm = ({ onSubmit, initialData }) => {
-    const isEditMode = !!initialData?.id && initialData.hasOwnProperty('description'); // Differentiates activity from partner
+    // initialData in "add" mode is the partner object, in "edit" mode is the activity object.
+    const isEditMode = initialData?.hasOwnProperty('description'); 
+    
     const [formData, setFormData] = useState({ 
       type: isEditMode ? initialData.type : 'Reunião', 
       description: isEditMode ? initialData.description : '' 
@@ -708,7 +875,12 @@ const ActivityForm = ({ onSubmit, initialData }) => {
         } else {
             // Adicionando uma nova atividade a um parceiro
             // 'initialData' aqui é o objeto do parceiro
-            onSubmit('activities', initialData, formData);
+            const dataToSubmit = {
+                ...formData,
+                partnerId: initialData.id,
+                partnerName: initialData.name,
+            };
+            onSubmit('activities', dataToSubmit); // The second argument is the data, not an ID
         }
     };
 
@@ -731,14 +903,15 @@ const ActivityForm = ({ onSubmit, initialData }) => {
 
 const ActivityFeed = ({ activities, onEdit, onDelete }) => {
     const activityIcons = { 'Reunião': Calendar, 'Ligação': Phone, 'Email': Mail, 'Marco': Award };
-    const timeSince = (date) => {
-        if (!date) return '';
+    const timeSince = (timestamp) => {
+        if (!timestamp || !timestamp.toDate) return 'data inválida';
+        const date = timestamp.toDate();
         const seconds = Math.floor((new Date() - date) / 1000);
-        let interval = seconds / 31536000; if (interval > 1) return Math.floor(interval) + " anos atrás";
-        interval = seconds / 2592000; if (interval > 1) return Math.floor(interval) + " meses atrás";
-        interval = seconds / 86400; if (interval > 1) return Math.floor(interval) + " dias atrás";
-        interval = seconds / 3600; if (interval > 1) return Math.floor(interval) + " horas atrás";
-        interval = seconds / 60; if (interval > 1) return Math.floor(interval) + " minutos atrás";
+        let interval = seconds / 31536000; if (interval > 1) return `há ${Math.floor(interval)} anos`;
+        interval = seconds / 2592000; if (interval > 1) return `há ${Math.floor(interval)} meses`;
+        interval = seconds / 86400; if (interval > 1) return `há ${Math.floor(interval)} dias`;
+        interval = seconds / 3600; if (interval > 1) return `há ${Math.floor(interval)} horas`;
+        interval = seconds / 60; if (interval > 1) return `há ${Math.floor(interval)} minutos`;
         return "agora mesmo";
     };
     if (activities.length === 0) return <p className="text-center text-gray-500 text-sm mt-4">Nenhuma atividade registrada.</p>;
@@ -751,7 +924,7 @@ const ActivityFeed = ({ activities, onEdit, onDelete }) => {
                         <div className="flex-shrink-0 w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center"><Icon className="h-5 w-5 text-gray-500" /></div>
                         <div className="flex-grow">
                             <p className="text-sm text-gray-800">{activity.description}</p>
-                            <p className="text-xs text-gray-500"><strong>{activity.partnerName}</strong> - {timeSince(activity.createdAt?.toDate())}</p>
+                            <p className="text-xs text-gray-500"><strong>{activity.partnerName}</strong> - {timeSince(activity.createdAt)}</p>
                         </div>
                         <div className="opacity-0 group-hover:opacity-100 transition-opacity"><ActionsMenu onEdit={() => onEdit(activity)} onDelete={() => onDelete(activity.id)} /></div>
                     </div>
@@ -760,4 +933,4 @@ const ActivityFeed = ({ activities, onEdit, onDelete }) => {
         </div>
     );
 };
-```eof
+
