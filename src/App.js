@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -692,7 +691,7 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
     }, [partners]);
 
     return (
-        <div className={!isMini ? "bg-white rounded-xl shadow-md" : ""}>
+        <div className={!isMini ? "bg-white rounded-xl shadow-md overflow-hidden" : ""}>
             <div className="overflow-x-auto">
                 <table className="w-full text-left">
                     <thead className={!isMini ? "bg-slate-50 border-b border-slate-200" : ""}>
@@ -761,59 +760,44 @@ const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => ( <div classNam
 // --- Componentes Genéricos ---
 const ActionsMenu = ({ onEdit, onDelete }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const [position, setPosition] = useState({ top: 0, left: 0 });
-    const buttonRef = useRef(null);
+    const menuRef = useRef(null);
 
-    const handleClick = (e) => {
-        e.stopPropagation();
-        const rect = buttonRef.current.getBoundingClientRect();
-        setPosition({
-            top: rect.bottom + window.scrollY,
-            left: rect.left + window.scrollX - 160, // Adjust this value to position the menu correctly
-        });
-        setIsOpen(!isOpen);
-    };
-    
     useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (isOpen && !event.target.closest('.actions-menu-content')) {
+        const handleClickOutside = (e) => {
+            if (menuRef.current && !menuRef.current.contains(e.target)) {
                 setIsOpen(false);
             }
         };
-
         document.addEventListener('mousedown', handleClickOutside);
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
         };
-    }, [isOpen]);
-
-    const menu = (
-        <div 
-            style={{ top: `${position.top}px`, left: `${position.left}px` }} 
-            className="fixed actions-menu-content w-40 bg-white rounded-md shadow-lg z-50 border"
-        >
-            <button 
-                onClick={(e) => { e.stopPropagation(); onEdit(); setIsOpen(false); }} 
-                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-            >
-                <Edit size={16} className="mr-2" /> Editar
-            </button>
-            <button 
-                onClick={(e) => { e.stopPropagation(); onDelete(); setIsOpen(false); }} 
-                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
-            >
-                <Trash2 size={16} className="mr-2" /> Excluir
-            </button>
-        </div>
-    );
+    }, []);
 
     return (
-        <>
-            <button ref={buttonRef} onClick={handleClick} className="p-2 rounded-full hover:bg-gray-200">
+        <div className="relative" ref={menuRef}>
+            <button onClick={(e) => {e.stopPropagation(); setIsOpen(!isOpen)}} className="p-2 rounded-full hover:bg-gray-200">
                 <MoreVertical size={18} />
             </button>
-            {isOpen && createPortal(menu, document.body)}
-        </>
+            {isOpen && (
+                <div 
+                    className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 border"
+                >
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onEdit(); setIsOpen(false); }} 
+                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+                    >
+                        <Edit size={16} className="mr-2" /> Editar
+                    </button>
+                    <button 
+                        onClick={(e) => { e.stopPropagation(); onDelete(); setIsOpen(false); }} 
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
+                    >
+                        <Trash2 size={16} className="mr-2" /> Excluir
+                    </button>
+                </div>
+            )}
+        </div>
     );
 };
 
