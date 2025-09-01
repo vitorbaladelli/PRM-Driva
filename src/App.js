@@ -28,7 +28,7 @@ import {
 } from 'firebase/firestore';
 import { 
     Users, Briefcase, DollarSign, Book, Plus, X, LayoutDashboard, Gem, Trophy, Star,
-    Search, Handshake, Lightbulb, Upload, Filter, XCircle, MoreVertical, Edit, Trash2, AlertTriangle,
+    Handshake, Lightbulb, Upload, Filter, XCircle, MoreVertical, Edit, Trash2, AlertTriangle,
     BadgePercent, ArrowLeft, User, TrendingUp, Target, Calendar, Phone, Mail, Award, LogOut, FileText,
     ChevronLeft, ChevronRight
 } from 'lucide-react';
@@ -360,21 +360,6 @@ function PrmApp({ auth }) {
         });
     };
     
-    // Handler para submissão do formulário de atividades
-    const handleActivitySubmit = async (collectionName, idOrData, data) => {
-        if (typeof idOrData === 'string') { // Modo de edição
-            await handleUpdate(collectionName, idOrData, data);
-        } else { // Modo de adição
-            const partnerInfo = idOrData; // O objeto partner é passado como 'initialData'
-            const dataToSave = {
-                ...data,
-                partnerId: partnerInfo.id,
-                partnerName: partnerInfo.name,
-            };
-            await handleAdd(collectionName, dataToSave);
-        }
-    };
-
 
     return (
         <div className="flex h-screen bg-gray-50 font-sans">
@@ -399,7 +384,7 @@ function PrmApp({ auth }) {
                                 deals={filteredDeals} 
                                 recentActivities={activities.slice(0, 5)} 
                                 onEdit={(activity) => openModal('activity', activity)} 
-                                onDelete={(id) => handleDelete('activities', id)} 
+                                onDelete={handleDelete}
                             />} 
                         />
                         <Route path="/partners" element={
@@ -422,7 +407,7 @@ function PrmApp({ auth }) {
                                 deals={filteredDeals} 
                                 partners={partners}
                                 onEdit={(d) => openModal('deal', d)} 
-                                onDelete={(id) => handleDelete('deals', id)} 
+                                onDelete={handleDelete} 
                                 selectedDeals={selectedDeals} 
                                 setSelectedDeals={setSelectedDeals} 
                             />} 
@@ -440,14 +425,14 @@ function PrmApp({ auth }) {
                             <ResourceHub 
                                 resources={resources} 
                                 onEdit={(r) => openModal('resource', r)} 
-                                onDelete={(id) => handleDelete('resources', id)} 
+                                onDelete={handleDelete}
                             />} 
                         />
                         <Route path="/nurturing" element={
                             <NurturingHub 
                                 nurturingContent={nurturingContent} 
                                 onEdit={(i) => openModal('nurturing', i)} 
-                                onDelete={(id) => handleDelete('nurturing', id)} 
+                                onDelete={handleDelete}
                             />} 
                         />
                     </Routes>
@@ -461,7 +446,6 @@ function PrmApp({ auth }) {
                 handleImport={handleImport} 
                 partners={partners} 
                 initialData={itemToEdit} 
-                handleActivitySubmit={handleActivitySubmit} 
             />}
             {itemToDelete && <ConfirmationModal onConfirm={confirmDelete} onCancel={() => setItemToDelete(null)} />}
             {bulkDeleteConfig && <ConfirmationModal onConfirm={confirmBulkDelete} onCancel={() => setBulkDeleteConfig(null)} title={bulkDeleteConfig.title} message={bulkDeleteConfig.message} />}
@@ -558,7 +542,7 @@ const Dashboard = ({ partners, deals, recentActivities, onEdit, onDelete }) => {
             </div>
             <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-md">
                 <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><TrendingUp className="mr-2"/>Atividades Recentes</h2>
-                <ActivityFeed activities={recentActivities} onEdit={onEdit} onDelete={onDelete} />
+                <ActivityFeed activities={recentActivities} onEdit={onEdit} onDelete={(id) => onDelete('activities', id)} />
             </div>
         </div> 
     );
@@ -583,7 +567,7 @@ const usePagination = (data, itemsPerPage = 10) => {
     useEffect(() => {
       if (currentPage > totalPages && totalPages > 0) {
         setCurrentPage(totalPages);
-      } else if (currentPage === 0 && totalPages > 0) {
+      } else if (currentPage < 1 && totalPages > 0) {
         setCurrentPage(1);
       }
     }, [data.length, totalPages, currentPage]);
@@ -749,7 +733,7 @@ const ActionsMenu = ({ onEdit, onDelete }) => {
 };
 const ConfirmationModal = ({ onConfirm, onCancel, title = "Confirmar Exclusão", message = "Tem a certeza de que deseja excluir este item? Esta ação não pode ser desfeita." }) => (<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center"><div className="mx-auto bg-red-100 rounded-full h-12 w-12 flex items-center justify-center"><AlertTriangle className="h-6 w-6 text-red-600" /></div><h3 className="text-lg font-medium text-gray-900 mt-4">{title}</h3><p className="text-sm text-gray-500 mt-2">{message}</p><div className="mt-6 flex justify-center gap-4"><button onClick={onCancel} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-semibold">Cancelar</button><button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold">Confirmar Exclusão</button></div></div></div>);
 
-const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, partners, initialData, handleActivitySubmit }) => {
+const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, partners, initialData }) => {
     const isEditMode = !!initialData?.id;
     const renderForm = () => {
         switch (modalType) {
@@ -757,7 +741,7 @@ const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, p
             case 'deal': return <DealForm onSubmit={isEditMode ? handleUpdate : handleAdd} partners={partners} initialData={initialData} />;
             case 'resource': return <ResourceForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'nurturing': return <NurturingForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
-            case 'activity': return <ActivityForm onSubmit={handleActivitySubmit} initialData={initialData} />;
+            case 'activity': return <ActivityForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'importPayments': return <ImportForm collectionName="payments" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importPartners': return <ImportForm collectionName="partners" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importDeals': return <ImportForm collectionName="deals" partners={partners} onSubmit={handleImport} closeModal={closeModal} />;
@@ -875,14 +859,21 @@ const ActivityForm = ({ onSubmit, initialData }) => {
     const handleSubmit = (e) => {
         e.preventDefault();
         if (isEditMode) {
-            onSubmit('activities', initialData.id, { ...formData, partnerId: initialData.partnerId, partnerName: initialData.partnerName });
+            // Editando uma atividade existente: onSubmit é a função handleUpdate
+            const dataToUpdate = {
+                type: formData.type,
+                description: formData.description,
+            };
+            onSubmit('activities', initialData.id, dataToUpdate);
         } else {
-            const dataToSubmit = {
+            // Adicionando uma nova atividade: onSubmit é a função handleAdd
+            // 'initialData' neste caso é o objeto do parceiro
+            const dataToSave = {
                 ...formData,
                 partnerId: initialData.id,
                 partnerName: initialData.name,
             };
-            onSubmit('activities', dataToSubmit);
+            onSubmit('activities', dataToSave);
         }
     };
 
@@ -928,7 +919,7 @@ const ActivityFeed = ({ activities, onEdit, onDelete }) => {
                             <p className="text-sm text-gray-800">{activity.description}</p>
                             <p className="text-xs text-gray-500"><strong>{activity.partnerName}</strong> - {timeSince(activity.createdAt)}</p>
                         </div>
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity"><ActionsMenu onEdit={() => onEdit(activity)} onDelete={() => onDelete(activity.id)} /></div>
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity"><ActionsMenu onEdit={() => onEdit(activity)} onDelete={() => onDelete('activities', activity.id)} /></div>
                     </div>
                 );
             })}
