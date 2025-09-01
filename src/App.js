@@ -516,7 +516,6 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
     const viewTitles = { '/': 'Dashboard de Canais', '/partners': 'Gestão de Parceiros', '/deals': 'Registro de Oportunidades', '/commissioning': 'Cálculo de Comissionamento', '/resources': 'Central de Recursos', '/nurturing': 'Nutrição de Parceiros', detail: 'Detalhes do Parceiro' };
     const currentTitle = isDetailView ? viewTitles.detail : viewTitles[location.pathname];
     
-    // CORREÇÃO APLICADA AQUI
     const buttonInfo = { 
         '/partners': { label: 'Novo Parceiro', action: () => openModal('partner') }, 
         '/deals': { label: 'Registrar Oportunidade', action: () => openModal('deal') }, 
@@ -1015,5 +1014,4 @@ const App = () => {
 
 
 export default App;
-
 
