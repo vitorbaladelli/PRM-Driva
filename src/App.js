@@ -405,7 +405,7 @@ function PrmApp({ auth }) {
                                 deals={filteredDeals} 
                                 recentActivities={activities.slice(0, 5)} 
                                 onEdit={(activity) => openModal('activity', activity)} 
-                                onDelete={handleDelete}
+                                onDelete={(id) => handleDelete('activities', id)}
                             />} 
                         />
                         <Route path="/partners" element={
@@ -663,7 +663,7 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
                     <tbody>
                         {paginatedDeals.map(d => (<tr key={d.id} className={`border-b border-slate-100 ${selectedDeals.includes(d.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
                             {!isMini && <td className="p-4"><input type="checkbox" checked={selectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
-                            {!isMini && <td className="p-4 text-slate-600">{d.submissionDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td>}
+                            {!isMini && <td className="p-4 text-slate-600">{d.submissionDate && typeof d.submissionDate.toDate === 'function' ? d.submissionDate.toDate().toLocaleDateString('pt-BR') : 'N/A'}</td>}
                             <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
                             <td className="p-4 text-slate-600">{partnerNameMap[d.partnerId] || d.partnerName || 'Desconhecido'}</td>
                             <td className="p-4 text-slate-600">{formatCurrency(parseBrazilianCurrency(d.value))}</td>
@@ -729,8 +729,6 @@ const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, p
             case 'deal': return <DealForm onSubmit={isEditMode ? handleUpdate : handleAdd} partners={partners} initialData={initialData} />;
             case 'resource': return <ResourceForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'nurturing': return <NurturingForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
-            // --- CORREÇÃO APLICADA AQUI ---
-            // Passamos ambas as funções para o ActivityForm e deixamos que ele decida qual usar.
             case 'activity': return <ActivityForm handleAdd={handleAdd} handleUpdate={handleUpdate} initialData={initialData} />;
             case 'importPayments': return <ImportForm collectionName="payments" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importPartners': return <ImportForm collectionName="partners" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
@@ -835,9 +833,6 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
     );
 };
 
-// --- CORREÇÃO APLICADA AQUI ---
-// Este componente agora recebe handleAdd e handleUpdate separadamente e usa a sua própria lógica
-// para determinar qual função chamar, corrigindo o problema.
 const ActivityForm = ({ handleAdd, handleUpdate, initialData }) => {
     // No modo "adicionar", initialData é o objeto do parceiro.
     // No modo "editar", initialData é o objeto da atividade.
@@ -915,7 +910,7 @@ const ActivityFeed = ({ activities, onEdit, onDelete }) => {
                             <p className="text-sm text-gray-800">{activity.description}</p>
                             <p className="text-xs text-gray-500"><strong>{activity.partnerName}</strong> - {timeSince(activity.createdAt)}</p>
                         </div>
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity"><ActionsMenu onEdit={() => onEdit(activity)} onDelete={() => onDelete('activities', activity.id)} /></div>
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity"><ActionsMenu onEdit={() => onEdit(activity)} onDelete={() => onDelete(activity.id)} /></div>
                     </div>
                 );
             })}
@@ -973,3 +968,4 @@ const App = () => {
 
 
 export default App;
+
