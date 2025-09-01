@@ -68,7 +68,7 @@ const parseDateString = (dateString) => {
         const year = parts[0].length === 4 ? parts[0] : parts[2];
         const month = parts[1];
         const day = parts[0].length === 4 ? parts[2] : parts[0];
-        const date = new Date(`${year}-${month}-${day}T12:00:00Z`); // Use T12:00:00Z to avoid timezone issues
+        const date = new Date(`${year}-${month}-${day}T12:00:00Z`); // Use T12:00:00Z para evitar problemas de fuso horário
         if (isNaN(date.getTime())) return null;
         return Timestamp.fromDate(date);
     } catch (e) {
@@ -150,7 +150,7 @@ const LoginPage = ({ auth }) => {
 };
 
 
-// --- Componente Principal do App ---
+// --- Componente Principal da App ---
 function PrmApp({ auth }) {
     const [db, setDb] = useState(null);
     const [partners, setPartners] = useState([]);
@@ -311,15 +311,16 @@ function PrmApp({ auth }) {
         } catch (e) { console.error("Erro ao excluir em massa:", e); }
     };
     
-     const confirmDeleteAllDeals = async () => {
+    const confirmDeleteAllDeals = async () => {
         if (!db) return;
+        setDeleteAllDealsConfirmation(false);
         try {
             const collectionPath = `artifacts/${appId}/public/data/deals`;
             const dealsCollection = collection(db, collectionPath);
             const snapshot = await getDocs(dealsCollection);
             
             if (snapshot.empty) {
-                setDeleteAllDealsConfirmation(false);
+                console.log("Nenhuma oportunidade para excluir.");
                 return;
             }
 
@@ -330,10 +331,8 @@ function PrmApp({ auth }) {
             
             await batch.commit();
             console.log(`Sucesso! ${snapshot.size} oportunidades foram excluídas.`);
-            setDeleteAllDealsConfirmation(false);
         } catch (e) {
             console.error("Erro ao excluir todas as oportunidades:", e);
-            setDeleteAllDealsConfirmation(false);
         }
     };
 
@@ -524,16 +523,19 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
             <div className="flex flex-wrap justify-between items-center gap-4">
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">{currentTitle}</h1>
                 <div className="flex items-center gap-2">
-                    {/* Botão temporário para excluir todas as oportunidades */}
-                    {location.pathname === '/opportunities' && (
-                        <button onClick={onDeleteAllDeals} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700 font-bold">
-                            <AlertTriangle className="h-5 w-5 mr-2" />
-                            <span>Excluir Todas Oportunidades</span>
-                        </button>
-                    )}
                     {location.pathname === '/partners' && (<button onClick={() => openModal('importPartners')} className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Parceiros</span></button>)}
-                    {location.pathname === '/deals' && selectedDealsCount > 0 && (<button onClick={onBulkDeleteDeals} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDealsCount})</span></button>)}
-                    {location.pathname === '/deals' && (<button onClick={() => openModal('importDeals')} className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Oportunidades</span></button>)}
+                    
+                    {location.pathname === '/deals' && (
+                        <>
+                            <button onClick={onDeleteAllDeals} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700 font-bold">
+                                <AlertTriangle className="h-5 w-5 mr-2" />
+                                <span>Excluir Todas</span>
+                            </button>
+                            {selectedDealsCount > 0 && (<button onClick={onBulkDeleteDeals} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDealsCount})</span></button>)}
+                            <button onClick={() => openModal('importDeals')} className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar</span></button>
+                        </>
+                    )}
+
                     {location.pathname === '/commissioning' && selectedPaymentsCount > 0 && (<button onClick={onBulkDeletePayments} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedPaymentsCount})</span></button>)}
                     {location.pathname === '/commissioning' && (<button onClick={() => openModal('importPayments')} className="flex items-center bg-green-500 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-green-600"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Pagamentos</span></button>)}
                     {buttonInfo[location.pathname] && (<button onClick={() => buttonInfo[location.pathname].action()} className="flex items-center bg-sky-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-sky-600"><Plus className="h-5 w-5 mr-2" /><span className="font-semibold">{buttonInfo[location.pathname].label}</span></button>)}
@@ -625,7 +627,7 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
                 </tbody>
             </table>
         </div>
-         {partners.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum parceiro registrado.</p>}
+         {partners.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum parceiro registado.</p>}
          <PaginatorComponent />
     </div>
 )};
@@ -699,7 +701,6 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
                     <tbody>
                         {paginatedDeals.map(d => (<tr key={d.id} className={`border-b border-slate-100 ${selectedDeals.includes(d.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
                             {!isMini && <td className="p-4"><input type="checkbox" checked={selectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
-                            {/* CORREÇÃO APLICADA AQUI para evitar que datas inválidas quebrem a página */}
                             {!isMini && <td className="p-4 text-slate-600">{d.submissionDate && typeof d.submissionDate.toDate === 'function' ? d.submissionDate.toDate().toLocaleDateString('pt-BR') : 'N/A'}</td>}
                             <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
                             <td className="p-4 text-slate-600">{partnerNameMap[d.partnerId] || d.partnerName || 'Desconhecido'}</td>
@@ -791,22 +792,13 @@ const PartnerForm = ({ onSubmit, initialData }) => {
 };
 
 const DealForm = ({ onSubmit, partners, initialData }) => {
-    // CORREÇÃO APLICADA AQUI para garantir que o formulário não quebre ao editar um item com data inválida.
     const getSafeSubmissionDate = () => {
         if (initialData?.submissionDate && typeof initialData.submissionDate.toDate === 'function') {
             return initialData.submissionDate.toDate().toISOString().split('T')[0];
         }
         return new Date().toISOString().split('T')[0];
     };
-
-    const [formData, setFormData] = useState({ 
-        clientName: initialData?.clientName || '', 
-        partnerId: initialData?.partnerId || '', 
-        submissionDate: getSafeSubmissionDate(), 
-        value: initialData?.value || '', 
-        status: initialData?.status || 'Pendente' 
-    });
-
+    const [formData, setFormData] = useState({ clientName: initialData?.clientName || '', partnerId: initialData?.partnerId || '', submissionDate: getSafeSubmissionDate(), value: initialData?.value || '', status: initialData?.status || 'Pendente' });
     const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     const handleSubmit = (e) => { e.preventDefault(); const selectedPartner = partners.find(p => p.id === formData.partnerId); const dataToSubmit = { ...formData, value: parseBrazilianCurrency(formData.value), partnerName: selectedPartner ? selectedPartner.name : 'N/A' }; if (initialData) onSubmit('deals', initialData.id, dataToSubmit); else onSubmit('deals', dataToSubmit); };
     return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="clientName" name="clientName" label="Nome do Cliente Final" value={formData.clientName} onChange={handleChange} required /><FormSelect id="partnerId" name="partnerId" label="Parceiro Responsável" value={formData.partnerId} onChange={handleChange} required><option value="">Selecione um parceiro</option>{partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</FormSelect><FormInput id="submissionDate" name="submissionDate" label="Data da Indicação" type="date" value={formData.submissionDate} onChange={handleChange} required /><FormInput id="value" name="value" label="Valor Estimado (R$)" type="text" value={formData.value} onChange={handleChange} required placeholder="Ex: 1.250,50" /><FormSelect id="status" name="status" label="Status" value={formData.status} onChange={handleChange} required><option>Pendente</option><option>Aprovado</option><option>Ganho</option><option>Perdido</option></FormSelect><FormButton>{initialData ? 'Salvar Alterações' : 'Registrar Oportunidade'}</FormButton></form>);
@@ -876,7 +868,7 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
             )}
 
             <div>
-                <label htmlFor="csv-upload" className="block text-sm font-medium text-gray-700 mb-2">Selecione um arquivo .csv</label>
+                <label htmlFor="csv-upload" className="block text-sm font-medium text-gray-700 mb-2">Selecione um ficheiro .csv</label>
                 <input id="csv-upload" type="file" accept=".csv" onChange={(e) => setFile(e.target.files[0])} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100"/>
             </div>
             {importStatus && <p className="text-sm text-center font-medium text-gray-600">{importStatus}</p>}
@@ -886,8 +878,6 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
 };
 
 const ActivityForm = ({ handleAdd, handleUpdate, initialData }) => {
-    // No modo "adicionar", initialData é o objeto do parceiro.
-    // No modo "editar", initialData é o objeto da atividade.
     const isEditMode = initialData?.hasOwnProperty('description'); 
     
     const [formData, setFormData] = useState({ 
@@ -900,15 +890,12 @@ const ActivityForm = ({ handleAdd, handleUpdate, initialData }) => {
     const handleSubmit = (e) => {
         e.preventDefault();
         if (isEditMode) {
-            // Editando uma atividade existente: chama handleUpdate
             const dataToUpdate = {
                 type: formData.type,
                 description: formData.description,
             };
             handleUpdate('activities', initialData.id, dataToUpdate);
         } else {
-            // Adicionando uma nova atividade: chama handleAdd
-            // 'initialData' neste caso é o objeto do parceiro
             const dataToSave = {
                 ...formData,
                 partnerId: initialData.id,
@@ -950,7 +937,7 @@ const ActivityFeed = ({ activities, onEdit, onDelete }) => {
         interval = seconds / 60; if (interval > 1) return `há ${Math.floor(interval)} minutos`;
         return "agora mesmo";
     };
-    if (activities.length === 0) return <p className="text-center text-gray-500 text-sm mt-4">Nenhuma atividade registrada.</p>;
+    if (activities.length === 0) return <p className="text-center text-gray-500 text-sm mt-4">Nenhuma atividade registada.</p>;
     return (
         <div className="space-y-4">
             {activities.map(activity => {
@@ -970,7 +957,7 @@ const ActivityFeed = ({ activities, onEdit, onDelete }) => {
     );
 };
 
-// --- Componente de Aplicação Principal (Wrapper) ---
+// --- Componente Principal da Aplicação (Wrapper) ---
 const App = () => {
     const [authInstance, setAuthInstance] = useState(null);
     const [user, setUser] = useState(null);
@@ -1020,6 +1007,4 @@ const App = () => {
 
 
 export default App;
-
-
 
