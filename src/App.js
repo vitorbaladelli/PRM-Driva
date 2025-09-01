@@ -22,12 +22,15 @@ import {
     Timestamp,
     updateDoc,
     deleteDoc,
-    orderBy
+    orderBy,
+    where,
+    getDocs
 } from 'firebase/firestore';
 import { 
     Users, Briefcase, DollarSign, Book, Plus, X, LayoutDashboard, Gem, Trophy, Star,
     Search, Handshake, Lightbulb, Upload, Filter, XCircle, MoreVertical, Edit, Trash2, AlertTriangle,
-    BadgePercent, ArrowLeft, User, TrendingUp, Target, Calendar, Phone, Mail, Award, LogOut, FileText
+    BadgePercent, ArrowLeft, User, TrendingUp, Target, Calendar, Phone, Mail, Award, LogOut, FileText,
+    ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 // --- Configuração do Firebase ---
@@ -45,6 +48,21 @@ const appId = process.env.REACT_APP_FIREBASE_PROJECT_ID || 'prm-driva-default';
 const parseBrazilianCurrency = (value) => {
     if (typeof value !== 'string') return parseFloat(value) || 0;
     return parseFloat(value.replace(/\./g, '').replace(',', '.')) || 0;
+};
+
+const parseDateString = (dateString) => {
+    if (!dateString) return null;
+    try {
+        const datePart = dateString.trim().split(' ')[0];
+        const [year, month, day] = datePart.split('-').map(Number);
+        if (isNaN(year) || isNaN(month) || isNaN(day)) return null;
+        const date = new Date(year, month - 1, day);
+        if (isNaN(date.getTime())) return null;
+        return Timestamp.fromDate(date);
+    } catch (e) {
+        console.error("Erro ao converter data:", dateString, e);
+        return null;
+    }
 };
 
 // --- Configurações do Programa de Parceria Driva ---
@@ -355,33 +373,65 @@ const Dashboard = ({ partners, deals, recentActivities, onEdit, onDelete }) => {
             </div>
             <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-md">
                 <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><TrendingUp className="mr-2"/>Atividades Recentes</h2>
-                <ActivityFeed activities={recentActivities} onEdit={onEdit} onDelete={onDelete} />
+                <ActivityFeed activities={recentActivities} onEdit={onEdit} onDelete={(id) => onDelete('activities', id)} />
             </div>
         </div> 
     );
 };
 
+const Paginator = ({ currentPage, totalPages, onPageChange }) => {
+    if (totalPages <= 1) return null;
+    return (
+        <div className="flex justify-center items-center mt-4">
+            <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50"><ChevronLeft size={20} /></button>
+            <span className="px-4 text-sm font-medium">Página {currentPage} de {totalPages}</span>
+            <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50"><ChevronRight size={20} /></button>
+        </div>
+    );
+};
+
+const usePagination = (data, itemsPerPage = 10) => {
+    const [currentPage, setCurrentPage] = useState(1);
+    const totalPages = Math.ceil(data.length / itemsPerPage);
+    const paginatedData = useMemo(() => data.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [data, currentPage, itemsPerPage]);
+    
+    useEffect(() => {
+      if (currentPage > totalPages && totalPages > 0) {
+        setCurrentPage(totalPages);
+      }
+    }, [data.length, totalPages, currentPage]);
+
+    const PaginatorComponent = () => <Paginator currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />;
+    
+    return [paginatedData, PaginatorComponent, currentPage, setCurrentPage];
+};
+
 const PartnerList = ({ partners, onEdit, onDelete }) => {
     const navigate = useNavigate();
+    const [paginatedPartners, PaginatorComponent] = usePagination(partners);
+    
     return (
-    <div className="bg-white rounded-xl shadow-md">
-        <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4 font-semibold text-slate-600">Nome do Parceiro</th><th className="p-4 font-semibold text-slate-600">Tipo</th><th className="p-4 font-semibold text-slate-600">Nível</th><th className="p-4 font-semibold text-slate-600">Pagamentos Recebidos</th><th className="p-4 font-semibold text-slate-600">Receita Gerada (Ganhos)</th><th className="p-4 font-semibold text-slate-600">Comissão a Pagar</th><th className="p-4 font-semibold text-slate-600">Ações</th></tr></thead>
-            <tbody>
-                {partners.map(p => (
-                    <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => navigate(`/partners/${p.id}`)}>
-                        <td className="p-4 text-slate-800 font-medium">{p.name}</td>
-                        <td className="p-4 text-slate-600">{p.type}</td>
-                        <td className="p-4"><span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center w-fit ${p.tier.bgColor} ${p.tier.color}`}><p.tier.icon className="h-4 w-4 mr-2" />{p.tier.name}</span></td>
-                        <td className="p-4 text-slate-600 font-medium">R$ {p.paymentsReceived.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="p-4 text-slate-600 font-medium">R$ {p.generatedRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="p-4 text-green-600 font-bold">R$ {p.commissionToPay.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="p-4 relative" onClick={(e) => e.stopPropagation()}><ActionsMenu onEdit={() => onEdit(p)} onDelete={() => onDelete(p.id)} /></td>
-                    </tr>
-                ))}
-            </tbody>
-        </table>
+    <div className="bg-white rounded-xl shadow-md overflow-hidden">
+        <div className="overflow-x-auto">
+            <table className="w-full text-left">
+                <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4 font-semibold text-slate-600">Nome do Parceiro</th><th className="p-4 font-semibold text-slate-600">Tipo</th><th className="p-4 font-semibold text-slate-600">Nível</th><th className="p-4 font-semibold text-slate-600">Pagamentos Recebidos</th><th className="p-4 font-semibold text-slate-600">Receita Gerada (Ganhos)</th><th className="p-4 font-semibold text-slate-600">Comissão a Pagar</th><th className="p-4 font-semibold text-slate-600">Ações</th></tr></thead>
+                <tbody>
+                    {paginatedPartners.map(p => (
+                        <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => navigate(`/partners/${p.id}`)}>
+                            <td className="p-4 text-slate-800 font-medium">{p.name}</td>
+                            <td className="p-4 text-slate-600">{p.type}</td>
+                            <td className="p-4"><span className={`px-3 py-1 rounded-full text-sm font-semibold flex items-center w-fit ${p.tier.bgColor} ${p.tier.color}`}><p.tier.icon className="h-4 w-4 mr-2" />{p.tier.name}</span></td>
+                            <td className="p-4 text-slate-600 font-medium">R$ {p.paymentsReceived.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-4 text-slate-600 font-medium">R$ {p.generatedRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-4 text-green-600 font-bold">R$ {p.commissionToPay.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-4 relative" onClick={(e) => e.stopPropagation()}><ActionsMenu onEdit={() => onEdit(p)} onDelete={() => onDelete('partners', p.id)} /></td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
          {partners.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum parceiro registrado.</p>}
+         <PaginatorComponent />
     </div>
 )};
 
@@ -411,7 +461,7 @@ const PartnerDetail = ({ allPartners, allActivities, openModal, onDelete }) => {
                     <h3 className="text-xl font-bold text-slate-700">Histórico de Atividades</h3>
                     <button onClick={() => openModal('activity', partner)} className="flex items-center bg-sky-100 text-sky-700 px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-sky-200"><Plus size={16} className="mr-2"/>Adicionar Atividade</button>
                 </div>
-                <ActivityFeed activities={partnerActivities} onEdit={(activity) => openModal('activity', activity)} onDelete={(id) => handleDelete('activities', id)} />
+                <ActivityFeed activities={partnerActivities} onEdit={(activity) => openModal('activity', activity)} onDelete={(id) => onDelete('activities', id)} />
             </div>
         </div>
     );
@@ -419,54 +469,75 @@ const PartnerDetail = ({ allPartners, allActivities, openModal, onDelete }) => {
 
 const DealList = ({ deals, onEdit, onDelete, selectedDeals, setSelectedDeals, isMini = false }) => {
     const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
-    const handleSelectAll = (e) => setSelectedDeals(e.target.checked ? deals.map(d => d.id) : []);
+    
+    const [paginatedDeals, PaginatorComponent, currentPage, setCurrentPage] = usePagination(deals);
+
+    useEffect(() => {
+        setSelectedDeals([]);
+    }, [currentPage, deals, setSelectedDeals]);
+    
+    const handleSelectAll = (e) => setSelectedDeals(e.target.checked ? paginatedDeals.map(d => d.id) : []);
     const handleSelectOne = (e, id) => setSelectedDeals(e.target.checked ? [...selectedDeals, id] : selectedDeals.filter(dealId => dealId !== id));
+
     return (
         <div className={!isMini ? "bg-white rounded-xl shadow-md" : ""}>
-            <table className="w-full text-left">
-                <thead className={!isMini ? "bg-slate-50 border-b border-slate-200" : ""}>
-                    <tr>
-                        {!isMini && <th className="p-4"><input type="checkbox" onChange={handleSelectAll} checked={deals.length > 0 && selectedDeals.length === deals.length} className="rounded" /></th>}
-                        {!isMini && <th className="p-4 font-semibold text-slate-600">Data</th>}
-                        <th className="p-4 font-semibold text-slate-600">Cliente Final</th>
-                        <th className="p-4 font-semibold text-slate-600">Parceiro</th>
-                        <th className="p-4 font-semibold text-slate-600">Valor</th>
-                        <th className="p-4 font-semibold text-slate-600">Status</th>
-                        {!isMini && <th className="p-4 font-semibold text-slate-600">Ações</th>}
-                    </tr>
-                </thead>
-                <tbody>
-                    {deals.map(d => (<tr key={d.id} className={`border-b border-slate-100 ${selectedDeals.includes(d.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
-                        {!isMini && <td className="p-4"><input type="checkbox" checked={selectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
-                        {!isMini && <td className="p-4 text-slate-600">{d.submissionDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td>}
-                        <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
-                        <td className="p-4 text-slate-600">{d.partnerName}</td>
-                        <td className="p-4 text-slate-600">R$ {parseBrazilianCurrency(d.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="p-4"><span className={`px-2 py-1 rounded-full text-sm font-semibold ${statusColors[d.status] || 'bg-gray-100'}`}>{d.status}</span></td>
-                        {!isMini && <td className="p-4 relative"><ActionsMenu onEdit={() => onEdit(d)} onDelete={() => onDelete(d.id)} /></td>}
-                    </tr>))}
-                </tbody>
-            </table>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead className={!isMini ? "bg-slate-50 border-b border-slate-200" : ""}>
+                        <tr>
+                            {!isMini && <th className="p-4"><input type="checkbox" onChange={handleSelectAll} checked={paginatedDeals.length > 0 && selectedDeals.length === paginatedDeals.length} className="rounded" /></th>}
+                            {!isMini && <th className="p-4 font-semibold text-slate-600">Data</th>}
+                            <th className="p-4 font-semibold text-slate-600">Cliente Final</th>
+                            <th className="p-4 font-semibold text-slate-600">Parceiro</th>
+                            <th className="p-4 font-semibold text-slate-600">Valor</th>
+                            <th className="p-4 font-semibold text-slate-600">Status</th>
+                            {!isMini && <th className="p-4 font-semibold text-slate-600">Ações</th>}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {paginatedDeals.map(d => (<tr key={d.id} className={`border-b border-slate-100 ${selectedDeals.includes(d.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
+                            {!isMini && <td className="p-4"><input type="checkbox" checked={selectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
+                            {!isMini && <td className="p-4 text-slate-600">{d.submissionDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td>}
+                            <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
+                            <td className="p-4 text-slate-600">{d.partnerName}</td>
+                            <td className="p-4 text-slate-600">R$ {parseBrazilianCurrency(d.value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                            <td className="p-4"><span className={`px-2 py-1 rounded-full text-sm font-semibold ${statusColors[d.status] || 'bg-gray-100'}`}>{d.status}</span></td>
+                            {!isMini && <td className="p-4 relative"><ActionsMenu onEdit={() => onEdit(d)} onDelete={() => onDelete('deals', d.id)} /></td>}
+                        </tr>))}
+                    </tbody>
+                </table>
+            </div>
             {deals.length === 0 && <p className="p-4 text-center text-gray-500">Nenhuma oportunidade encontrada.</p>}
+            {!isMini && <PaginatorComponent />}
         </div>
     );
 };
 
-const CommissioningList = ({ payments, selectedPayments, setSelectedPayments }) => {
-    const handleSelectAll = (e) => setSelectedPayments(e.target.checked ? payments.map(p => p.id) : []);
+const CommissioningList = ({ payments, onImport, selectedPayments, setSelectedPayments }) => {
+    const [paginatedPayments, PaginatorComponent, currentPage] = usePagination(payments);
+    
+    useEffect(() => {
+        setSelectedPayments([]);
+    }, [currentPage, payments, setSelectedPayments]);
+    
+    const handleSelectAll = (e) => setSelectedPayments(e.target.checked ? paginatedPayments.map(p => p.id) : []);
     const handleSelectOne = (e, id) => setSelectedPayments(e.target.checked ? [...selectedPayments, id] : selectedPayments.filter(pId => pId !== id));
+
     return (
-        <div className="bg-white rounded-xl shadow-md">
-            <table className="w-full text-left">
-                <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4"><input type="checkbox" onChange={handleSelectAll} checked={payments.length > 0 && selectedPayments.length === payments.length} className="rounded" /></th><th className="p-4 font-semibold text-slate-600">Data do Pagamento</th><th className="p-4 font-semibold text-slate-600">Cliente Final</th><th className="p-4 font-semibold text-slate-600">Parceiro</th><th className="p-4 font-semibold text-slate-600">Valor Pago</th></tr></thead>
-                <tbody>{payments.map(p => (<tr key={p.id} className={`border-b border-slate-100 ${selectedPayments.includes(p.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}><td className="p-4"><input type="checkbox" checked={selectedPayments.includes(p.id)} onChange={(e) => handleSelectOne(e, p.id)} className="rounded" /></td><td className="p-4 text-slate-600">{p.paymentDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td><td className="p-4 text-slate-800 font-medium">{p.clientName}</td><td className="p-4 text-slate-600">{p.partnerName}</td><td className="p-4 text-slate-600 font-medium">R$ {parseBrazilianCurrency(p.paymentValue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>))}{payments.length === 0 && <tr><td colSpan="5"><p className="p-4 text-center text-gray-500">Nenhum pagamento encontrado.</p></td></tr>}</tbody>
-            </table>
+        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4"><input type="checkbox" onChange={handleSelectAll} checked={paginatedPayments.length > 0 && selectedPayments.length === paginatedPayments.length} className="rounded" /></th><th className="p-4 font-semibold text-slate-600">Data do Pagamento</th><th className="p-4 font-semibold text-slate-600">Cliente Final</th><th className="p-4 font-semibold text-slate-600">Parceiro</th><th className="p-4 font-semibold text-slate-600">Valor Pago</th></tr></thead>
+                    <tbody>{paginatedPayments.map(p => (<tr key={p.id} className={`border-b border-slate-100 ${selectedPayments.includes(p.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}><td className="p-4"><input type="checkbox" checked={selectedPayments.includes(p.id)} onChange={(e) => handleSelectOne(e, p.id)} className="rounded" /></td><td className="p-4 text-slate-600">{p.paymentDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td><td className="p-4 text-slate-800 font-medium">{p.clientName}</td><td className="p-4 text-slate-600">{p.partnerName}</td><td className="p-4 text-slate-600 font-medium">R$ {parseBrazilianCurrency(p.paymentValue).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td></tr>))}{payments.length === 0 && <tr><td colSpan="5"><p className="p-4 text-center text-gray-500">Nenhum pagamento encontrado.</p></td></tr>}</tbody>
+                </table>
+            </div>
+            <PaginatorComponent />
         </div>
     );
 };
 
-const ResourceHub = ({ resources, onEdit, onDelete }) => ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{resources.map(r => (<div key={r.id} className="bg-white p-6 rounded-xl shadow-md flex flex-col relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(r)} onDelete={() => onDelete(r.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{r.title}</h3><p className="text-slate-600 mt-2 flex-grow">{r.description}</p><div className="mt-4 flex justify-between items-center"><span className="text-sm font-semibold bg-sky-100 text-sky-800 px-2 py-1 rounded-full">{r.category}</span><a href={r.url} target="_blank" rel="noopener noreferrer" className="font-bold text-sky-500 hover:text-sky-600">Aceder</a></div></div>))}{resources.length === 0 && <p className="p-4 text-center text-gray-500 col-span-full">Nenhum recurso disponível.</p>}</div>);
-const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => ( <div className="space-y-6">{nurturingContent.map(item => (<div key={item.id} className="bg-white p-6 rounded-xl shadow-md relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(item)} onDelete={() => onDelete(item.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{item.title}</h3><p className="text-sm text-gray-500 mt-1">{item.createdAt?.toDate().toLocaleDateString('pt-BR') || ''}</p><p className="text-slate-600 mt-4 whitespace-pre-wrap">{item.content}</p></div>))}{nurturingContent.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum conteúdo de nutrição publicado.</p>}</div>);
+const ResourceHub = ({ resources, onEdit, onDelete }) => ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{resources.map(r => (<div key={r.id} className="bg-white p-6 rounded-xl shadow-md flex flex-col relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(r)} onDelete={() => onDelete('resources', r.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{r.title}</h3><p className="text-slate-600 mt-2 flex-grow">{r.description}</p><div className="mt-4 flex justify-between items-center"><span className="text-sm font-semibold bg-sky-100 text-sky-800 px-2 py-1 rounded-full">{r.category}</span><a href={r.url} target="_blank" rel="noopener noreferrer" className="font-bold text-sky-500 hover:text-sky-600">Aceder</a></div></div>))}{resources.length === 0 && <p className="p-4 text-center text-gray-500 col-span-full">Nenhum recurso disponível.</p>}</div>);
+const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => ( <div className="space-y-6">{nurturingContent.map(item => (<div key={item.id} className="bg-white p-6 rounded-xl shadow-md relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(item)} onDelete={() => onDelete('nurturing', item.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{item.title}</h3><p className="text-sm text-gray-500 mt-1">{item.createdAt?.toDate().toLocaleDateString('pt-BR') || ''}</p><p className="text-slate-600 mt-4 whitespace-pre-wrap">{item.content}</p></div>))}{nurturingContent.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum conteúdo de nutrição publicado.</p>}</div>);
 
 // --- Componentes Genéricos ---
 const ActionsMenu = ({ onEdit, onDelete }) => {
@@ -503,10 +574,10 @@ const FormTextarea = ({ id, label, ...props }) => (<div><label htmlFor={id} clas
 const FormButton = ({ children, ...props }) => (<button type="submit" {...props} className="w-full bg-sky-500 text-white py-2 px-4 rounded-md hover:bg-sky-600 font-semibold transition-colors duration-200 disabled:bg-sky-300">{children}</button>);
 
 const PartnerForm = ({ onSubmit, initialData }) => {
-    const [formData, setFormData] = useState({ name: initialData?.name || '', type: initialData?.type || 'FINDER', contactName: initialData?.contactName || '', contactEmail: initialData?.contactEmail || '' });
+    const [formData, setFormData] = useState({ name: initialData?.name || '', type: initialData?.type || 'Finder', contactName: initialData?.contactName || '', contactEmail: initialData?.contactEmail || '' });
     const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     const handleSubmit = (e) => { e.preventDefault(); if (initialData) onSubmit('partners', initialData.id, formData); else onSubmit('partners', formData); };
-    return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="name" name="name" label="Nome do Parceiro" value={formData.name} onChange={handleChange} required /><FormSelect id="type" name="type" label="Tipo de Parceiro" value={formData.type} onChange={handleChange} required><option value="FINDER">Finder</option><option value="SELLER">Seller</option></FormSelect><FormInput id="contactName" name="contactName" label="Nome do Contato" value={formData.contactName} onChange={handleChange} required /><FormInput id="contactEmail" name="contactEmail" label="Email do Contato" type="email" value={formData.contactEmail} onChange={handleChange} required /><FormButton>{initialData ? 'Salvar Alterações' : 'Salvar Parceiro'}</FormButton></form>);
+    return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="name" name="name" label="Nome do Parceiro" value={formData.name} onChange={handleChange} required /><FormSelect id="type" name="type" label="Tipo de Parceiro" value={formData.type} onChange={handleChange} required><option value="Finder">Finder</option><option value="Seller">Seller</option></FormSelect><FormInput id="contactName" name="contactName" label="Nome do Contato" value={formData.contactName} onChange={handleChange} required /><FormInput id="contactEmail" name="contactEmail" label="Email do Contato" type="email" value={formData.contactEmail} onChange={handleChange} required /><FormButton>{initialData ? 'Salvar Alterações' : 'Salvar Parceiro'}</FormButton></form>);
 };
 
 const DealForm = ({ onSubmit, partners, initialData }) => {
@@ -547,7 +618,7 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
         setIsImporting(true); setImportStatus('Importando...');
         try {
             const { successfulImports, failedImports } = await onSubmit(file, collectionName);
-            setImportStatus(`${successfulImports} itens importados. ${failedImports} falharam.`);
+            setImportStatus(`${successfulImports} itens importados. ${failedImports > 0 ? `${failedImports} falharam.` : ''}`);
             setTimeout(() => closeModal(), 3000);
         } catch (error) { setImportStatus('Ocorreu um erro durante a importação.'); console.error(error); } 
         finally { setIsImporting(false); }
@@ -618,3 +689,4 @@ const ActivityFeed = ({ activities, onEdit, onDelete }) => {
         </div>
     );
 };
+```eof
