@@ -112,7 +112,7 @@ const LoginPage = ({ auth }) => {
         <div className="flex items-center justify-center min-h-screen bg-gray-100">
             <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-xl shadow-lg">
                 <div className="flex justify-center">
-                    <img src="/logo-driva-positiva.png" alt="Logo Driva" className="h-12"/>
+                    <h1 className="text-3xl font-bold text-slate-800">PRM Driva</h1>
                 </div>
                 <h2 className="text-2xl font-bold text-center text-slate-800">Acesso ao PRM Driva</h2>
                 <form onSubmit={handleLogin} className="space-y-6">
@@ -193,7 +193,7 @@ function PrmApp({ auth }) {
             const totalOpportunitiesValue = partnerDeals.reduce((sum, d) => sum + (parseBrazilianCurrency(d.value) || 0), 0);
             const wonDealsCount = partnerDeals.filter(d => d.status === 'Ganho').length;
             const conversionRate = partnerDeals.length > 0 ? (wonDealsCount / partnerDeals.length) * 100 : 0;
-            const type = partner.type || 'FINDER';
+            const type = partner.type || 'Finder';
             const tierDetails = getPartnerDetails(paymentsReceived, type);
             const commissionToPay = paymentsReceived * (tierDetails.commissionRate / 100);
             return { ...partner, paymentsReceived, tier: tierDetails, totalOpportunitiesValue, conversionRate, commissionToPay, generatedRevenue };
@@ -273,7 +273,7 @@ function PrmApp({ auth }) {
                     <Routes>
                         <Route path="/" element={<Dashboard partners={partnersWithDetails} deals={filteredDeals} recentActivities={activities.slice(0, 5)} onEdit={(activity) => openModal('activity', activity)} onDelete={(id) => handleDelete('activities', id)} />} />
                         <Route path="/partners" element={<PartnerList partners={partnersWithDetails} onEdit={(p) => openModal('partner', p)} onDelete={(id) => handleDelete('partners', id)} />} />
-                        <Route path="/partners/:partnerId" element={<PartnerDetail allPartners={partnersWithDetails} allActivities={activities} openModal={openModal} onDelete={(id) => handleDelete('activities', id)} />} />
+                        <Route path="/partners/:partnerId" element={<PartnerDetail allPartners={partnersWithDetails} allActivities={activities} openModal={openModal} handleDeleteActivity={(id) => handleDelete('activities', id)} />} />
                         <Route path="/deals" element={<DealList deals={filteredDeals} onEdit={(d) => openModal('deal', d)} onDelete={(id) => handleDelete('deals', id)} selectedDeals={selectedDeals} setSelectedDeals={setSelectedDeals} />} />
                         <Route path="/commissioning" element={<CommissioningList payments={filteredPayments} onImport={(file) => handleImport(file, 'payments')} selectedPayments={selectedPayments} setSelectedPayments={setSelectedPayments} />} />
                         <Route path="/resources" element={<ResourceHub resources={resources} onEdit={(r) => openModal('resource', r)} onDelete={(id) => handleDelete('resources', id)} />} />
@@ -299,7 +299,7 @@ export default function AppWrapper() {
         script.async = true;
         document.head.appendChild(script);
         try {
-            if(firebaseConfig.apiKey) {
+            if(firebaseConfig.apiKey && firebaseConfig.projectId) {
                 const app = initializeApp(firebaseConfig);
                 const authInstance = getAuth(app);
                 setAuth(authInstance);
@@ -308,12 +308,15 @@ export default function AppWrapper() {
                     setLoading(false);
                 });
                 return () => { unsubscribe(); if (document.head.contains(script)) document.head.removeChild(script); };
-            } else { setLoading(false); }
+            } else { 
+                console.error("Firebase config is missing!");
+                setLoading(false); 
+            }
         } catch (error) { console.error("Erro na inicialização:", error); setLoading(false); }
     }, []);
 
     if (loading) return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-semibold text-gray-700">A carregar...</div></div>;
-    if (!firebaseConfig.apiKey) return <div className="flex items-center justify-center h-screen bg-red-50 text-red-800 p-8"><div className="text-center"><h2 className="text-2xl font-bold mb-4">Erro de Configuração</h2><p>As chaves do Firebase não foram encontradas.</p></div></div>;
+    if (!firebaseConfig.apiKey || !firebaseConfig.projectId) return <div className="flex items-center justify-center h-screen bg-red-50 text-red-800 p-8"><div className="text-center"><h2 className="text-2xl font-bold mb-4">Erro de Configuração</h2><p>As chaves do Firebase não foram encontradas. Verifique as variáveis de ambiente.</p></div></div>;
 
     return user ? <PrmApp auth={auth} /> : <LoginPage auth={auth} />;
 }
@@ -323,7 +326,7 @@ const Sidebar = ({ auth }) => {
     const location = useLocation();
     const handleLogout = () => signOut(auth);
     const navItems = [ { path: '/', label: 'Dashboard', icon: LayoutDashboard }, { path: '/partners', label: 'Parceiros', icon: Users }, { path: '/deals', label: 'Oportunidades', icon: Briefcase }, { path: '/commissioning', label: 'Comissionamento', icon: BadgePercent }, { path: '/resources', label: 'Recursos', icon: Book }, { path: '/nurturing', label: 'Nutrição', icon: Lightbulb }, ];
-    return ( <aside className="w-16 sm:w-64 bg-slate-800 text-white flex flex-col"><div className="h-16 flex items-center justify-center sm:justify-start sm:px-4 border-b border-slate-700"><img src="/logo-driva-negativa.png" alt="Logo Driva" className="h-8" /></div><nav className="flex-1 mt-6"><ul>{navItems.map(item => (<li key={item.path} className="px-3 sm:px-6 py-1"><Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname.startsWith(item.path) && item.path !== '/' || location.pathname === item.path ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}><item.icon className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">{item.label}</span></Link></li>))}</ul></nav><div className="p-4 border-t border-slate-700"><button onClick={handleLogout} className="w-full flex items-center p-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white"><LogOut className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">Sair</span></button></div></aside> );
+    return ( <aside className="w-16 sm:w-64 bg-slate-800 text-white flex flex-col"><div className="h-16 flex items-center justify-center sm:justify-start sm:px-6 border-b border-slate-700"><h1 className="text-xl font-bold text-white hidden sm:block">PRM Driva</h1></div><nav className="flex-1 mt-6"><ul>{navItems.map(item => (<li key={item.path} className="px-3 sm:px-6 py-1"><Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname.startsWith(item.path) && item.path !== '/' || location.pathname === item.path ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}><item.icon className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">{item.label}</span></Link></li>))}</ul></nav><div className="p-4 border-t border-slate-700"><button onClick={handleLogout} className="w-full flex items-center p-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white"><LogOut className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">Sair</span></button></div></aside> );
 };
 
 const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selectedDealsCount, onBulkDeleteDeals, selectedPaymentsCount, onBulkDeletePayments }) => {
@@ -373,7 +376,7 @@ const Dashboard = ({ partners, deals, recentActivities, onEdit, onDelete }) => {
             </div>
             <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-md">
                 <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><TrendingUp className="mr-2"/>Atividades Recentes</h2>
-                <ActivityFeed activities={recentActivities} onEdit={onEdit} onDelete={(id) => onDelete('activities', id)} />
+                <ActivityFeed activities={recentActivities} onEdit={onEdit} onDelete={onDelete} />
             </div>
         </div> 
     );
@@ -435,7 +438,7 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
     </div>
 )};
 
-const PartnerDetail = ({ allPartners, allActivities, openModal, onDelete }) => {
+const PartnerDetail = ({ allPartners, allActivities, openModal, handleDeleteActivity }) => {
     const { partnerId } = useParams();
     const partner = allPartners.find(p => p.id === partnerId);
     const partnerActivities = useMemo(() => allActivities.filter(a => a.partnerId === partnerId), [allActivities, partnerId]);
@@ -461,7 +464,7 @@ const PartnerDetail = ({ allPartners, allActivities, openModal, onDelete }) => {
                     <h3 className="text-xl font-bold text-slate-700">Histórico de Atividades</h3>
                     <button onClick={() => openModal('activity', partner)} className="flex items-center bg-sky-100 text-sky-700 px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-sky-200"><Plus size={16} className="mr-2"/>Adicionar Atividade</button>
                 </div>
-                <ActivityFeed activities={partnerActivities} onEdit={(activity) => openModal('activity', activity)} onDelete={(id) => onDelete('activities', id)} />
+                <ActivityFeed activities={partnerActivities} onEdit={(activity) => openModal('activity', activity)} onDelete={handleDeleteActivity} />
             </div>
         </div>
     );
