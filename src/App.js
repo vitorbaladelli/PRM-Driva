@@ -450,7 +450,7 @@ function PrmApp({ auth }) {
                                 handleDeleteActivity={(id) => handleDelete('activities', id)} 
                             />} 
                         />
-                        <Route path="/opportunities" element={
+                        <Route path="/deals" element={
                             <DealList 
                                 deals={filteredDeals} 
                                 partners={partners}
