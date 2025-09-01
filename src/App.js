@@ -474,39 +474,6 @@ function PrmApp({ auth }) {
     );
 }
 
-export default function AppWrapper() {
-    const [auth, setAuth] = useState(null);
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js';
-        script.async = true;
-        document.head.appendChild(script);
-        try {
-            if(firebaseConfig.apiKey && firebaseConfig.projectId) {
-                const app = initializeApp(firebaseConfig);
-                const authInstance = getAuth(app);
-                setAuth(authInstance);
-                const unsubscribe = onAuthStateChanged(authInstance, (user) => {
-                    setUser(user);
-                    setLoading(false);
-                });
-                return () => { unsubscribe(); if (document.head.contains(script)) document.head.removeChild(script); };
-            } else { 
-                console.error("Firebase config is missing!");
-                setLoading(false); 
-            }
-        } catch (error) { console.error("Erro na inicialização:", error); setLoading(false); }
-    }, []);
-
-    if (loading) return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-semibold text-gray-700">A carregar...</div></div>;
-    if (!firebaseConfig.apiKey || !firebaseConfig.projectId) return <div className="flex items-center justify-center h-screen bg-red-50 text-red-800 p-8"><div className="text-center"><h2 className="text-2xl font-bold mb-4">Erro de Configuração</h2><p>As chaves do Firebase não foram encontradas. Verifique as variáveis de ambiente.</p></div></div>;
-
-    return user ? <PrmApp auth={auth} /> : <LoginPage auth={auth} />;
-}
-
 // --- Componentes de UI ---
 const Sidebar = ({ auth }) => {
     const location = useLocation();
@@ -762,14 +729,16 @@ const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, p
             case 'deal': return <DealForm onSubmit={isEditMode ? handleUpdate : handleAdd} partners={partners} initialData={initialData} />;
             case 'resource': return <ResourceForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'nurturing': return <NurturingForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
-            case 'activity': return <ActivityForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
+            // --- CORREÇÃO APLICADA AQUI ---
+            // Passamos ambas as funções para o ActivityForm e deixamos que ele decida qual usar.
+            case 'activity': return <ActivityForm handleAdd={handleAdd} handleUpdate={handleUpdate} initialData={initialData} />;
             case 'importPayments': return <ImportForm collectionName="payments" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importPartners': return <ImportForm collectionName="partners" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importDeals': return <ImportForm collectionName="deals" partners={partners} onSubmit={handleImport} closeModal={closeModal} />;
             default: return null;
         }
     };
-    const titles = { partner: isEditMode ? 'Editar Parceiro' : 'Adicionar Parceiro', deal: isEditMode ? 'Editar Oportunidade' : 'Registrar Oportunidade', resource: isEditMode ? 'Editar Recurso' : 'Adicionar Recurso', nurturing: isEditMode ? 'Editar Conteúdo' : 'Adicionar Conteúdo', activity: isEditMode ? 'Editar Atividade' : 'Adicionar Atividade', importPayments: 'Importar Planilha de Pagamentos', importPartners: 'Importar Planilha de Parceiros', importDeals: 'Importar Planilha de Oportunidades' };
+    const titles = { partner: isEditMode ? 'Editar Parceiro' : 'Adicionar Parceiro', deal: isEditMode ? 'Editar Oportunidade' : 'Registrar Oportunidade', resource: isEditMode ? 'Editar Recurso' : 'Adicionar Recurso', nurturing: isEditMode ? 'Editar Conteúdo' : 'Adicionar Conteúdo', activity: initialData?.hasOwnProperty('description') ? 'Editar Atividade' : 'Adicionar Atividade', importPayments: 'Importar Planilha de Pagamentos', importPartners: 'Importar Planilha de Parceiros', importDeals: 'Importar Planilha de Oportunidades' };
     return (<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-lg"><div className="flex justify-between items-center p-4 border-b"><h2 className="text-xl font-bold text-slate-800">{titles[modalType]}</h2><button onClick={closeModal} className="text-gray-400 hover:text-gray-600"><X className="h-6 w-6" /></button></div><div className="p-6">{renderForm()}</div></div></div>);
 };
 
@@ -866,9 +835,12 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
     );
 };
 
-
-const ActivityForm = ({ onSubmit, initialData }) => {
-    // initialData in "add" mode is the partner object, in "edit" mode is the activity object.
+// --- CORREÇÃO APLICADA AQUI ---
+// Este componente agora recebe handleAdd e handleUpdate separadamente e usa a sua própria lógica
+// para determinar qual função chamar, corrigindo o problema.
+const ActivityForm = ({ handleAdd, handleUpdate, initialData }) => {
+    // No modo "adicionar", initialData é o objeto do parceiro.
+    // No modo "editar", initialData é o objeto da atividade.
     const isEditMode = initialData?.hasOwnProperty('description'); 
     
     const [formData, setFormData] = useState({ 
@@ -881,29 +853,26 @@ const ActivityForm = ({ onSubmit, initialData }) => {
     const handleSubmit = (e) => {
         e.preventDefault();
         if (isEditMode) {
-            // Editando uma atividade existente: onSubmit é a função handleUpdate
+            // Editando uma atividade existente: chama handleUpdate
             const dataToUpdate = {
                 type: formData.type,
                 description: formData.description,
-                 // Preserva os dados originais que não são editados no formulário
-                partnerId: initialData.partnerId,
-                partnerName: initialData.partnerName,
-                createdAt: initialData.createdAt
             };
-            onSubmit('activities', initialData.id, dataToUpdate);
+            handleUpdate('activities', initialData.id, dataToUpdate);
         } else {
-            // Adicionando uma nova atividade: onSubmit é a função handleAdd
+            // Adicionando uma nova atividade: chama handleAdd
             // 'initialData' neste caso é o objeto do parceiro
             const dataToSave = {
                 ...formData,
                 partnerId: initialData.id,
                 partnerName: initialData.name,
             };
-            onSubmit('activities', dataToSave);
+            handleAdd('activities', dataToSave);
         }
     };
 
     const partnerName = isEditMode ? initialData.partnerName : initialData.name;
+    const buttonText = isEditMode ? 'Salvar Alterações' : 'Adicionar Atividade';
     
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -915,10 +884,11 @@ const ActivityForm = ({ onSubmit, initialData }) => {
                 <option>Marco</option>
             </FormSelect>
             <FormTextarea id="description" name="description" label="Descrição / Resumo" value={formData.description} onChange={handleChange} required />
-            <FormButton>{isEditMode ? 'Salvar Alterações' : 'Adicionar Atividade'}</FormButton>
+            <FormButton>{buttonText}</FormButton>
         </form>
     );
 };
+
 
 const ActivityFeed = ({ activities, onEdit, onDelete }) => {
     const activityIcons = { 'Reunião': Calendar, 'Ligação': Phone, 'Email': Mail, 'Marco': Award };
@@ -1001,3 +971,5 @@ const App = () => {
     return user ? <PrmApp auth={authInstance} /> : <LoginPage auth={authInstance} />;
 }
 
+
+export default App;
