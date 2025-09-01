@@ -663,6 +663,7 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
                     <tbody>
                         {paginatedDeals.map(d => (<tr key={d.id} className={`border-b border-slate-100 ${selectedDeals.includes(d.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
                             {!isMini && <td className="p-4"><input type="checkbox" checked={selectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
+                            {/* CORREÇÃO APLICADA AQUI para evitar que datas inválidas quebrem a página */}
                             {!isMini && <td className="p-4 text-slate-600">{d.submissionDate && typeof d.submissionDate.toDate === 'function' ? d.submissionDate.toDate().toLocaleDateString('pt-BR') : 'N/A'}</td>}
                             <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
                             <td className="p-4 text-slate-600">{partnerNameMap[d.partnerId] || d.partnerName || 'Desconhecido'}</td>
@@ -754,7 +755,22 @@ const PartnerForm = ({ onSubmit, initialData }) => {
 };
 
 const DealForm = ({ onSubmit, partners, initialData }) => {
-    const [formData, setFormData] = useState({ clientName: initialData?.clientName || '', partnerId: initialData?.partnerId || '', submissionDate: initialData?.submissionDate?.toDate().toISOString().split('T')[0] || new Date().toISOString().split('T')[0], value: initialData?.value || '', status: initialData?.status || 'Pendente' });
+    // CORREÇÃO APLICADA AQUI para garantir que o formulário não quebre ao editar um item com data inválida.
+    const getSafeSubmissionDate = () => {
+        if (initialData?.submissionDate && typeof initialData.submissionDate.toDate === 'function') {
+            return initialData.submissionDate.toDate().toISOString().split('T')[0];
+        }
+        return new Date().toISOString().split('T')[0];
+    };
+
+    const [formData, setFormData] = useState({ 
+        clientName: initialData?.clientName || '', 
+        partnerId: initialData?.partnerId || '', 
+        submissionDate: getSafeSubmissionDate(), 
+        value: initialData?.value || '', 
+        status: initialData?.status || 'Pendente' 
+    });
+
     const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     const handleSubmit = (e) => { e.preventDefault(); const selectedPartner = partners.find(p => p.id === formData.partnerId); const dataToSubmit = { ...formData, value: parseBrazilianCurrency(formData.value), partnerName: selectedPartner ? selectedPartner.name : 'N/A' }; if (initialData) onSubmit('deals', initialData.id, dataToSubmit); else onSubmit('deals', dataToSubmit); };
     return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="clientName" name="clientName" label="Nome do Cliente Final" value={formData.clientName} onChange={handleChange} required /><FormSelect id="partnerId" name="partnerId" label="Parceiro Responsável" value={formData.partnerId} onChange={handleChange} required><option value="">Selecione um parceiro</option>{partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</FormSelect><FormInput id="submissionDate" name="submissionDate" label="Data da Indicação" type="date" value={formData.submissionDate} onChange={handleChange} required /><FormInput id="value" name="value" label="Valor Estimado (R$)" type="text" value={formData.value} onChange={handleChange} required placeholder="Ex: 1.250,50" /><FormSelect id="status" name="status" label="Status" value={formData.status} onChange={handleChange} required><option>Pendente</option><option>Aprovado</option><option>Ganho</option><option>Perdido</option></FormSelect><FormButton>{initialData ? 'Salvar Alterações' : 'Registrar Oportunidade'}</FormButton></form>);
@@ -968,4 +984,5 @@ const App = () => {
 
 
 export default App;
+
 
