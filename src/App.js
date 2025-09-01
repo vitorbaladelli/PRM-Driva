@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { initializeApp } from 'firebase/app';
 import { 
@@ -760,10 +761,62 @@ const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => ( <div classNam
 // --- Componentes Genéricos ---
 const ActionsMenu = ({ onEdit, onDelete }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const menuRef = useRef(null);
-    useEffect(() => { const handleClickOutside = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setIsOpen(false); }; document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside); }, []);
-    return (<div className="relative z-10" ref={menuRef}><button onClick={() => setIsOpen(!isOpen)} className="p-2 rounded-full hover:bg-gray-200"><MoreVertical size={18} /></button>{isOpen && (<div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 border"><button onClick={(e) => { e.stopPropagation(); onEdit(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"><Edit size={16} className="mr-2" /> Editar</button><button onClick={(e) => { e.stopPropagation(); onDelete(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"><Trash2 size={16} className="mr-2" /> Excluir</button></div>)}</div>);
+    const [position, setPosition] = useState({ top: 0, left: 0 });
+    const buttonRef = useRef(null);
+
+    const handleClick = (e) => {
+        e.stopPropagation();
+        const rect = buttonRef.current.getBoundingClientRect();
+        setPosition({
+            top: rect.bottom + window.scrollY,
+            left: rect.left + window.scrollX - 160, // Adjust this value to position the menu correctly
+        });
+        setIsOpen(!isOpen);
+    };
+    
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (isOpen && !event.target.closest('.actions-menu-content')) {
+                setIsOpen(false);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isOpen]);
+
+    const menu = (
+        <div 
+            style={{ top: `${position.top}px`, left: `${position.left}px` }} 
+            className="fixed actions-menu-content w-40 bg-white rounded-md shadow-lg z-50 border"
+        >
+            <button 
+                onClick={(e) => { e.stopPropagation(); onEdit(); setIsOpen(false); }} 
+                className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+            >
+                <Edit size={16} className="mr-2" /> Editar
+            </button>
+            <button 
+                onClick={(e) => { e.stopPropagation(); onDelete(); setIsOpen(false); }} 
+                className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
+            >
+                <Trash2 size={16} className="mr-2" /> Excluir
+            </button>
+        </div>
+    );
+
+    return (
+        <>
+            <button ref={buttonRef} onClick={handleClick} className="p-2 rounded-full hover:bg-gray-200">
+                <MoreVertical size={18} />
+            </button>
+            {isOpen && createPortal(menu, document.body)}
+        </>
+    );
 };
+
 const ConfirmationModal = ({ onConfirm, onCancel, title = "Confirmar Exclusão", message = "Tem a certeza de que deseja excluir este item? Esta ação não pode ser desfeita." }) => (<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center"><div className="mx-auto bg-red-100 rounded-full h-12 w-12 flex items-center justify-center"><AlertTriangle className="h-6 w-6 text-red-600" /></div><h3 className="text-lg font-medium text-gray-900 mt-4">{title}</h3><p className="text-sm text-gray-500 mt-2">{message}</p><div className="mt-6 flex justify-center gap-4"><button onClick={onCancel} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-semibold">Cancelar</button><button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold">Confirmar Exclusão</button></div></div></div>);
 
 const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, partners, initialData }) => {
