@@ -166,7 +166,7 @@ function PrmApp({ auth }) {
         if (!db) return;
         const collectionsConfig = { 
             partners: { setter: setPartners }, 
-            deals: { setter: setDeals }, 
+            deals: { setter: setDeals, orderByField: 'submissionDate' }, 
             resources: { setter: setResources }, 
             nurturing: { setter: setNurturingContent }, 
             payments: { setter: setPayments }, 
@@ -658,6 +658,12 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
     const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
     
     const [paginatedDeals, PaginatorComponent, currentPage, setCurrentPage] = usePagination(deals);
+
+    useEffect(() => {
+        if (currentPage !== 1) {
+            setCurrentPage(1);
+        }
+    }, [deals, currentPage, setCurrentPage]);
 
     useEffect(() => {
         setSelectedDeals([]);
