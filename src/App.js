@@ -1383,3 +1383,5 @@ const ActivityFeed = ({ activities, onEdit, onDelete }) => {
         </div>
 
     );
+
+};
