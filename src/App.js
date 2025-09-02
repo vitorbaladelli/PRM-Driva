@@ -149,7 +149,7 @@ const PrmProvider = ({ children, auth }) => {
                     const batch = writeBatch(db);
                     id.forEach(docId => batch.delete(doc(db, path, docId)));
                     await batch.commit();
-                    setSelection(prev => ({ ...prev, [collectionName]: [] }));
+                    setSelection(prev => ({ ...prev, [collectionName === 'deals' ? 'deals' : 'payments']: [] }));
                     setUiState(prev => ({ ...prev, bulkDeleteConfig: null }));
                     return;
                 default:
@@ -370,9 +370,7 @@ const Sidebar = () => {
 };
 
 const Header = () => {
-    const { openModal, startDate, endDate, setStartDate, setEndDate, deals, payments, handleBulkDelete } = usePrm();
-    const selectedDealsCount = deals.length;
-    const selectedPaymentsCount = payments.length;
+    const { openModal, startDate, endDate, setStartDate, setEndDate, deals: selectedDeals, payments: selectedPayments, handleBulkDelete } = usePrm();
     const location = useLocation();
     const isDetailView = location.pathname.includes('/partners/');
     const viewTitles = { '/': 'Dashboard de Canais', '/partners': 'Gestão de Parceiros', '/opportunities': 'Registro de Oportunidades', '/commissioning': 'Cálculo de Comissionamento', '/resources': 'Central de Recursos', '/nurturing': 'Nutrição de Parceiros', detail: 'Detalhes do Parceiro' };
@@ -383,7 +381,7 @@ const Header = () => {
         '/resources': { label: 'Novo Recurso', modal: 'resource' },
         '/nurturing': { label: 'Novo Conteúdo', modal: 'nurturing' },
     };
-    const showFilters = ['/', '/partners', '/opportunities', '/commissioning'].some(path => location.pathname.startsWith(path)) || isDetailView;
+    const showFilters = ['/', '/partners', '/opportunities', '/commissioning', '/partners/'].some(path => location.pathname.startsWith(path));
 
     return (
         <div>
@@ -391,9 +389,9 @@ const Header = () => {
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">{currentTitle}</h1>
                 <div className="flex items-center gap-2">
                     {location.pathname === '/partners' && (<button onClick={() => openModal('importPartners')} className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Parceiros</span></button>)}
-                    {location.pathname === '/opportunities' && selectedDealsCount > 0 && (<button onClick={() => handleBulkDelete('deals', deals)} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDealsCount})</span></button>)}
+                    {location.pathname === '/opportunities' && selectedDeals.length > 0 && (<button onClick={() => handleBulkDelete('deals', selectedDeals)} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDeals.length})</span></button>)}
                     {location.pathname === '/opportunities' && (<button onClick={() => openModal('importDeals')} className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Oportunidades</span></button>)}
-                    {location.pathname === '/commissioning' && selectedPaymentsCount > 0 && (<button onClick={() => handleBulkDelete('payments', payments)} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedPaymentsCount})</span></button>)}
+                    {location.pathname === '/commissioning' && selectedPayments.length > 0 && (<button onClick={() => handleBulkDelete('payments', selectedPayments)} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedPayments.length})</span></button>)}
                     {location.pathname === '/commissioning' && (<button onClick={() => openModal('importPayments')} className="flex items-center bg-green-500 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-green-600"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Pagamentos</span></button>)}
                     {buttonInfo[location.pathname] && (<button onClick={() => openModal(buttonInfo[location.pathname].modal)} className="flex items-center bg-sky-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-sky-600"><Plus className="h-5 w-5 mr-2" /><span className="font-semibold">{buttonInfo[location.pathname].label}</span></button>)}
                 </div>
@@ -508,10 +506,10 @@ const PartnerDetail = () => {
 };
 
 const DealList = ({ isMini = false, deals: initialDeals }) => {
-    const { partners, openModal, handleDelete, deals: contextDeals, filteredDeals, deals: selectedDeals, setSelectedDeals } = usePrm();
-    const deals = isMini ? initialDeals : filteredDeals;
+    const { partners, openModal, handleDelete, filteredDeals, deals: selectedDeals, setSelectedDeals } = usePrm();
+    const dealsToDisplay = isMini ? initialDeals : filteredDeals;
     const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
-    const [paginatedDeals, PaginatorComponent, currentPage, setCurrentPage] = usePagination(deals);
+    const [paginatedDeals, PaginatorComponent, currentPage, setCurrentPage] = usePagination(dealsToDisplay);
 
     useEffect(() => { if (!isMini) { setCurrentPage(1); } }, [filteredDeals, isMini, setCurrentPage]);
     useEffect(() => { if (!isMini) { setSelectedDeals([]); } }, [currentPage, isMini, setSelectedDeals]);
@@ -547,18 +545,21 @@ const DealList = ({ isMini = false, deals: initialDeals }) => {
                     </tbody>
                 </table>
             </div>
-            {deals.length === 0 && <p className="p-4 text-center text-gray-500">Nenhuma oportunidade encontrada.</p>}
+            {dealsToDisplay.length === 0 && <p className="p-4 text-center text-gray-500">Nenhuma oportunidade encontrada.</p>}
             {!isMini && <PaginatorComponent />}
         </div>
     );
 };
 
 const CommissioningList = () => {
-    const { partners, filteredPayments, selectedPayments, setSelectedPayments } = usePrm();
-    const [paginatedPayments, PaginatorComponent, currentPage] = usePagination(filteredPayments);
-    useEffect(() => { setSelectedPayments([]); }, [currentPage, filteredPayments, setSelectedPayments]);
+    const { partners, filteredPayments, payments: selectedPayments, setSelectedPayments } = usePrm();
+    const [paginatedPayments, PaginatorComponent, currentPage, setCurrentPage] = usePagination(filteredPayments);
+    useEffect(() => { setCurrentPage(1); }, [filteredPayments, setCurrentPage]);
+    useEffect(() => { setSelectedPayments([]); }, [currentPage, setSelectedPayments]);
+
     const handleSelectAll = (e) => setSelectedPayments(e.target.checked ? paginatedPayments.map(p => p.id) : []);
     const handleSelectOne = (e, id) => setSelectedPayments(e.target.checked ? [...selectedPayments, id] : selectedPayments.filter(pId => pId !== id));
+    
     return (
         <div className="bg-white rounded-xl shadow-md overflow-hidden">
             <div className="overflow-x-auto">
