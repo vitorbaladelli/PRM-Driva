@@ -62,10 +62,9 @@ const parseDateString = (dateString) => {
     if (!dateString) return null;
     try {
         const datePart = dateString.trim().split(' ')[0];
-        // Handles both YYYY-MM-DD and DD/MM/YYYY
         const parts = datePart.split(/[-/]/);
         if (parts.length !== 3) return null;
-        
+        // Assume AAAA-MM-DD ou DD/MM/AAAA
         const year = parts[0].length === 4 ? parts[0] : parts[2];
         const month = parts[1];
         const day = parts[0].length === 4 ? parts[2] : parts[0];
@@ -335,10 +334,10 @@ function PrmApp({ auth }) {
                                 isValid = true;
                             }
                         } else if (collectionName === 'deals') {
-                            const partnerIdToUse = selectedPartnerIdForDeals;
-                            if (partnerIdToUse && item.clientName && item.value && item.status && item.submissionDate) {
-                                const partnerName = partners.find(p => p.id === partnerIdToUse)?.name || 'Desconhecido';
-                                dataToSet = { ...dataToSet, partnerId: partnerIdToUse, partnerName: partnerName, clientName: item.clientName.trim(), value: parseBrazilianCurrency(item.value), status: item.status.trim(), submissionDate: parseDateString(item.submissionDate) };
+                            // When importing deals, a partner must be selected in the UI
+                            if (selectedPartnerIdForDeals && item.clientName && item.value && item.status && item.submissionDate) {
+                                const partnerName = partners.find(p => p.id === selectedPartnerIdForDeals)?.name || 'Desconhecido';
+                                dataToSet = { ...dataToSet, partnerId: selectedPartnerIdForDeals, partnerName: partnerName, clientName: item.clientName.trim(), value: parseBrazilianCurrency(item.value), status: item.status.trim(), submissionDate: parseDateString(item.submissionDate) };
                                 isValid = !!dataToSet.submissionDate;
                             }
                         } else if (collectionName === 'payments') {
@@ -370,6 +369,7 @@ function PrmApp({ auth }) {
             });
         });
     };
+    
 
     return (
         <div className="flex h-screen bg-gray-50 font-sans">
@@ -404,7 +404,6 @@ function PrmApp({ auth }) {
                         <Route path="/partners/:partnerId" element={
                             <PartnerDetail 
                                 allPartners={partnersWithDetails} 
-                                allActivities={activities}
                             />} 
                         />
                         <Route path="/opportunities" element={
@@ -725,7 +724,7 @@ const ActionsMenu = ({ onEdit, onDelete }) => {
 const ConfirmationModal = ({ onConfirm, onCancel, title = "Confirmar Exclusão", message = "Tem a certeza de que deseja excluir este item? Esta ação não pode ser desfeita." }) => (<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center"><div className="mx-auto bg-red-100 rounded-full h-12 w-12 flex items-center justify-center"><AlertTriangle className="h-6 w-6 text-red-600" /></div><h3 className="text-lg font-medium text-gray-900 mt-4">{title}</h3><p className="text-sm text-gray-500 mt-2">{message}</p><div className="mt-6 flex justify-center gap-4"><button onClick={onCancel} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-semibold">Cancelar</button><button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold">Confirmar Exclusão</button></div></div></div>);
 
 const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, partners, initialData }) => {
-    const isEditMode = !!initialData?.id;
+    const isEditMode = !!initialData;
     const renderForm = () => {
         switch (modalType) {
             case 'partner': return <PartnerForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
