@@ -613,9 +613,9 @@ const usePagination = (data, itemsPerPage = 10) => {
 const PartnerList = ({ partners, onEdit, onDelete }) => {
     const navigate = useNavigate();
     const [paginatedPartners, PaginatorComponent] = usePagination(partners);
-    
+
     return (
-    <div className="bg-white rounded-xl shadow-md overflow-hidden">
+    <div className="bg-white rounded-xl shadow-md">
         <div className="overflow-x-auto">
             <table className="w-full text-left">
                 <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4 font-semibold text-slate-600">Nome do Parceiro</th><th className="p-4 font-semibold text-slate-600">Tipo</th><th className="p-4 font-semibold text-slate-600">Nível</th><th className="p-4 font-semibold text-slate-600">Pagamentos Recebidos</th><th className="p-4 font-semibold text-slate-600">Receita Gerada (Ganhos)</th><th className="p-4 font-semibold text-slate-600">Comissão a Pagar</th><th className="p-4 font-semibold text-slate-600">Ações</th></tr></thead>
@@ -688,13 +688,13 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
         const map = {};
         partners.forEach(p => { map[p.id] = p.name; });
         return map;
-    }, [partners]);
+}, [partners]);
 
-    return (
-        <div className={!isMini ? "bg-white rounded-xl shadow-md overflow-hidden" : ""}>
-            <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                    <thead className={!isMini ? "bg-slate-50 border-b border-slate-200" : ""}>
+return (
+    <div className={!isMini ? "bg-white rounded-xl shadow-md" : ""}>
+        <div className="overflow-x-auto">
+            <table className="w-full text-left">
+                <thead className={!isMini ? "bg-slate-50 border-b border-slate-200" : ""}>
                         <tr>
                             {!isMini && <th className="p-4"><input type="checkbox" onChange={handleSelectAll} checked={paginatedDeals.length > 0 && selectedDeals.length === paginatedDeals.length} className="rounded" /></th>}
                             {!isMini && <th className="p-4 font-semibold text-slate-600">Data</th>}
