@@ -27,8 +27,8 @@ import {
 } from 'firebase/firestore';
 import { 
     Users, Briefcase, DollarSign, Book, Plus, X, LayoutDashboard, Gem, Trophy, Star,
-    Handshake, Lightbulb, Upload, Filter, XCircle, MoreVertical, Edit, Trash2, AlertTriangle,
-    BadgePercent, ArrowLeft, User, TrendingUp, Target, Calendar, Phone, Mail, Award, LogOut, FileText,
+    Upload, Filter, XCircle, MoreVertical, Edit, Trash2, AlertTriangle,
+    BadgePercent, ArrowLeft, User, TrendingUp, Target, LogOut, Handshake, Lightbulb,
     ChevronLeft, ChevronRight
 } from 'lucide-react';
 
@@ -62,13 +62,15 @@ const parseDateString = (dateString) => {
     if (!dateString) return null;
     try {
         const datePart = dateString.trim().split(' ')[0];
+        // Handles both YYYY-MM-DD and DD/MM/YYYY
         const parts = datePart.split(/[-/]/);
         if (parts.length !== 3) return null;
-        // Assume AAAA-MM-DD or DD/MM/AAAA
+        
         const year = parts[0].length === 4 ? parts[0] : parts[2];
         const month = parts[1];
         const day = parts[0].length === 4 ? parts[2] : parts[0];
-        const date = new Date(`${year}-${month}-${day}T12:00:00Z`); // Use T12:00:00Z para evitar problemas de fuso horário
+
+        const date = new Date(`${year}-${month}-${day}T12:00:00Z`); // Use T12:00:00Z to avoid timezone issues
         if (isNaN(date.getTime())) return null;
         return Timestamp.fromDate(date);
     } catch (e) {
@@ -76,7 +78,6 @@ const parseDateString = (dateString) => {
         return null;
     }
 };
-
 
 // --- Configurações do Programa de Parceria Driva ---
 const TIER_THRESHOLDS = {
@@ -101,7 +102,6 @@ const getPartnerTierDetails = (paymentsReceived, type) => {
     
     return { name: 'N/A', icon: Users, color: 'text-slate-400', bgColor: 'bg-slate-100', commissionRate: 0 };
 };
-
 
 // --- Componente de Login ---
 const LoginPage = ({ auth }) => {
@@ -149,8 +149,7 @@ const LoginPage = ({ auth }) => {
     );
 };
 
-
-// --- Componente Principal da App ---
+// --- Componente Principal do App ---
 function PrmApp({ auth }) {
     const [db, setDb] = useState(null);
     const [partners, setPartners] = useState([]);
@@ -158,13 +157,11 @@ function PrmApp({ auth }) {
     const [payments, setPayments] = useState([]);
     const [resources, setResources] = useState([]);
     const [nurturingContent, setNurturingContent] = useState([]);
-    const [activities, setActivities] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalType, setModalType] = useState('');
     const [itemToEdit, setItemToEdit] = useState(null);
     const [itemToDelete, setItemToDelete] = useState(null);
     const [bulkDeleteConfig, setBulkDeleteConfig] = useState(null);
-    const [deleteAllDealsConfirmation, setDeleteAllDealsConfirmation] = useState(false);
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [selectedDeals, setSelectedDeals] = useState([]);
@@ -185,13 +182,10 @@ function PrmApp({ auth }) {
             resources: { setter: setResources }, 
             nurturing: { setter: setNurturingContent }, 
             payments: { setter: setPayments }, 
-            activities: { setter: setActivities, orderByField: 'createdAt' }
         };
         const unsubscribers = Object.entries(collectionsConfig).map(([col, config]) => {
             const collectionPath = `artifacts/${appId}/public/data/${col}`;
-            const q = config.orderByField 
-                ? query(collection(db, collectionPath), orderBy(config.orderByField, 'desc'))
-                : query(collection(db, collectionPath));
+            const q = query(collection(db, collectionPath), orderBy('createdAt', 'desc'));
             
             return onSnapshot(q, (snapshot) => {
                 const dataList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -257,9 +251,6 @@ function PrmApp({ auth }) {
             if (data.submissionDate) {
                 dataWithTs.submissionDate = parseDateString(data.submissionDate);
             }
-             if (collectionName === 'activities') {
-                dataWithTs = { ...data, createdAt: serverTimestamp() }
-            }
             
             await addDoc(collection(db, path), dataWithTs);
             closeModal();
@@ -273,9 +264,6 @@ function PrmApp({ auth }) {
             const dataToUpdate = {...data};
             if (data.submissionDate) {
                 dataToUpdate.submissionDate = parseDateString(data.submissionDate);
-            }
-            if (collectionName === 'activities') {
-                 dataToUpdate.updatedAt = serverTimestamp();
             }
             await updateDoc(docRef, dataToUpdate);
             closeModal();
@@ -311,31 +299,6 @@ function PrmApp({ auth }) {
         } catch (e) { console.error("Erro ao excluir em massa:", e); }
     };
     
-    const confirmDeleteAllDeals = async () => {
-        if (!db) return;
-        setDeleteAllDealsConfirmation(false);
-        try {
-            const collectionPath = `artifacts/${appId}/public/data/deals`;
-            const dealsCollection = collection(db, collectionPath);
-            const snapshot = await getDocs(dealsCollection);
-            
-            if (snapshot.empty) {
-                console.log("Nenhuma oportunidade para excluir.");
-                return;
-            }
-
-            const batch = writeBatch(db);
-            snapshot.docs.forEach(doc => {
-                batch.delete(doc.ref);
-            });
-            
-            await batch.commit();
-            console.log(`Sucesso! ${snapshot.size} oportunidades foram excluídas.`);
-        } catch (e) {
-            console.error("Erro ao excluir todas as oportunidades:", e);
-        }
-    };
-
      const handleImport = async (file, collectionName, selectedPartnerIdForDeals) => {
         if (!file || !db) return;
         const partnersSnapshot = await getDocs(query(collection(db, `artifacts/${appId}/public/data/partners`)));
@@ -407,7 +370,7 @@ function PrmApp({ auth }) {
             });
         });
     };
-    
+
     return (
         <div className="flex h-screen bg-gray-50 font-sans">
             <Sidebar auth={auth} />
@@ -422,7 +385,6 @@ function PrmApp({ auth }) {
                     onBulkDeleteDeals={() => handleBulkDelete('deals', selectedDeals)} 
                     selectedPaymentsCount={selectedPayments.length} 
                     onBulkDeletePayments={() => handleBulkDelete('payments', selectedPayments)}
-                    onDeleteAllDeals={() => setDeleteAllDealsConfirmation(true)}
                 />
                 <div className="mt-6">
                     <Routes>
@@ -430,9 +392,6 @@ function PrmApp({ auth }) {
                             <Dashboard 
                                 partners={partnersWithDetails} 
                                 deals={filteredDeals} 
-                                recentActivities={activities.slice(0, 5)} 
-                                onEdit={(activity) => openModal('activity', activity)} 
-                                onDelete={(id) => handleDelete('activities', id)}
                             />} 
                         />
                         <Route path="/partners" element={
@@ -445,12 +404,10 @@ function PrmApp({ auth }) {
                         <Route path="/partners/:partnerId" element={
                             <PartnerDetail 
                                 allPartners={partnersWithDetails} 
-                                allActivities={activities} 
-                                openModal={openModal} 
-                                handleDeleteActivity={(id) => handleDelete('activities', id)} 
+                                allActivities={activities}
                             />} 
                         />
-                        <Route path="/deals" element={
+                        <Route path="/opportunities" element={
                             <DealList 
                                 deals={filteredDeals} 
                                 partners={partners}
@@ -497,9 +454,41 @@ function PrmApp({ auth }) {
             />}
             {itemToDelete && <ConfirmationModal onConfirm={confirmDelete} onCancel={() => setItemToDelete(null)} />}
             {bulkDeleteConfig && <ConfirmationModal onConfirm={confirmBulkDelete} onCancel={() => setBulkDeleteConfig(null)} title={bulkDeleteConfig.title} message={bulkDeleteConfig.message} />}
-            {deleteAllDealsConfirmation && <ConfirmationModal onConfirm={confirmDeleteAllDeals} onCancel={() => setDeleteAllDealsConfirmation(false)} title="Excluir TODAS as Oportunidades?" message="Esta ação é irreversível e irá remover todos os registos de oportunidades da base de dados." />}
         </div>
     );
+}
+
+export default function AppWrapper() {
+    const [auth, setAuth] = useState(null);
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js';
+        script.async = true;
+        document.head.appendChild(script);
+        try {
+            if (Object.values(firebaseConfig).every(v => v)) {
+                const app = initializeApp(firebaseConfig);
+                const authInstance = getAuth(app);
+                setAuth(authInstance);
+                const unsubscribe = onAuthStateChanged(authInstance, (user) => {
+                    setUser(user);
+                    setLoading(false);
+                });
+                return () => { unsubscribe(); if (document.head.contains(script)) document.head.removeChild(script); };
+            } else { 
+                console.error("Firebase config is missing!");
+                setLoading(false); 
+            }
+        } catch (error) { console.error("Erro na inicialização do Firebase:", error); setLoading(false); }
+    }, []);
+
+    if (loading) return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-semibold text-gray-700">A carregar...</div></div>;
+    if (!firebaseConfig.apiKey || !firebaseConfig.projectId) return <div className="flex items-center justify-center h-screen bg-red-50 text-red-800 p-8"><div className="text-center"><h2 className="text-2xl font-bold mb-4">Erro de Configuração</h2><p>As chaves do Firebase não foram encontradas. Verifique as variáveis de ambiente.</p></div></div>;
+
+    return user ? <PrmApp auth={auth} /> : <LoginPage auth={auth} />;
 }
 
 // --- Componentes de UI ---
@@ -507,23 +496,16 @@ const Sidebar = ({ auth }) => {
     const location = useLocation();
     const handleLogout = () => signOut(auth);
     const navItems = [ { path: '/', label: 'Dashboard', icon: LayoutDashboard }, { path: '/partners', label: 'Parceiros', icon: Users }, { path: '/deals', label: 'Oportunidades', icon: Briefcase }, { path: '/commissioning', label: 'Comissionamento', icon: BadgePercent }, { path: '/resources', label: 'Recursos', icon: Book }, { path: '/nurturing', label: 'Nutrição', icon: Lightbulb }, ];
-    return ( <aside className="w-16 sm:w-64 bg-slate-800 text-white flex flex-col"><div className="h-16 flex items-center justify-center sm:justify-start sm:px-6 border-b border-slate-700"><img src="/logo-driva-negativa.png" alt="Logo Driva" className="h-8 hidden sm:block" /><Handshake className="h-8 w-8 text-white sm:hidden" /></div><nav className="flex-1 mt-6"><ul>{navItems.map(item => (<li key={item.path} className="px-3 sm:px-6 py-1"><Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname.startsWith(item.path) && item.path !== '/' || location.pathname === item.path ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}><item.icon className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">{item.label}</span></Link></li>))}</ul></nav><div className="p-4 border-t border-slate-700"><button onClick={handleLogout} className="w-full flex items-center p-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white"><LogOut className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">Sair</span></button></div></aside> );
+    return ( <aside className="w-16 sm:w-64 bg-slate-800 text-white flex flex-col"><div className="h-16 flex items-center justify-center sm:justify-start sm:px-6 border-b border-slate-700"><img src="/logo-driva-negativa.png" alt="Logo Driva" className="h-8 hidden sm:block" /><Handshake className="h-8 w-8 text-white sm:hidden" /></div><nav className="flex-1 mt-6"><ul>{navItems.map(item => (<li key={item.path} className="px-3 sm:px-6 py-1"><Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname === item.path || (location.pathname.startsWith(item.path) && item.path !== '/') ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}><item.icon className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">{item.label}</span></Link></li>))}</ul></nav><div className="p-4 border-t border-slate-700"><button onClick={handleLogout} className="w-full flex items-center p-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white"><LogOut className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">Sair</span></button></div></aside> );
 };
 
-const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selectedDealsCount, onBulkDeleteDeals, selectedPaymentsCount, onBulkDeletePayments, onDeleteAllDeals }) => {
+const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selectedDealsCount, onBulkDeleteDeals, selectedPaymentsCount, onBulkDeletePayments }) => {
     const location = useLocation();
     const isDetailView = location.pathname.includes('/partners/');
     const viewTitles = { '/': 'Dashboard de Canais', '/partners': 'Gestão de Parceiros', '/deals': 'Registro de Oportunidades', '/commissioning': 'Cálculo de Comissionamento', '/resources': 'Central de Recursos', '/nurturing': 'Nutrição de Parceiros', detail: 'Detalhes do Parceiro' };
-    const currentTitle = isDetailView ? viewTitles.detail : viewTitles[location.pathname];
-    
-    const buttonInfo = { 
-        '/partners': { label: 'Novo Parceiro', action: () => openModal('partner') }, 
-        '/deals': { label: 'Registrar Oportunidade', action: () => openModal('deal') }, 
-        '/resources': { label: 'Novo Recurso', action: () => openModal('resource') }, 
-        '/nurturing': { label: 'Novo Conteúdo', action: () => openModal('nurturing') }, 
-    };
-
-    const showFilters = ['/', '/partners', '/deals', '/commissioning', '/partners/'].some(path => location.pathname.startsWith(path));
+    const currentTitle = isDetailView ? viewTitles.detail : (viewTitles[location.pathname] || 'PRM Driva');
+    const buttonInfo = { '/partners': { label: 'Novo Parceiro', action: () => openModal('partner') }, '/deals': { label: 'Registrar Oportunidade', action: () => openModal('deal') }, '/resources': { label: 'Novo Recurso', action: () => openModal('resource') }, '/nurturing': { label: 'Novo Conteúdo', action: () => openModal('nurturing') }, };
+    const showFilters = ['/', '/partners', '/deals', '/commissioning'].includes(location.pathname) || isDetailView;
     
     return (
         <div>
@@ -531,18 +513,8 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">{currentTitle}</h1>
                 <div className="flex items-center gap-2">
                     {location.pathname === '/partners' && (<button onClick={() => openModal('importPartners')} className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Parceiros</span></button>)}
-                    
-                    {location.pathname === '/deals' && (
-                        <>
-                            <button onClick={onDeleteAllDeals} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700 font-bold">
-                                <AlertTriangle className="h-5 w-5 mr-2" />
-                                <span>Excluir Todas</span>
-                            </button>
-                            {selectedDealsCount > 0 && (<button onClick={onBulkDeleteDeals} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDealsCount})</span></button>)}
-                            <button onClick={() => openModal('importDeals')} className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar</span></button>
-                        </>
-                    )}
-
+                    {location.pathname === '/deals' && selectedDealsCount > 0 && (<button onClick={onBulkDeleteDeals} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDealsCount})</span></button>)}
+                    {location.pathname === '/deals' && (<button onClick={() => openModal('importDeals')} className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Oportunidades</span></button>)}
                     {location.pathname === '/commissioning' && selectedPaymentsCount > 0 && (<button onClick={onBulkDeletePayments} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedPaymentsCount})</span></button>)}
                     {location.pathname === '/commissioning' && (<button onClick={() => openModal('importPayments')} className="flex items-center bg-green-500 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-green-600"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Pagamentos</span></button>)}
                     {buttonInfo[location.pathname] && (<button onClick={() => buttonInfo[location.pathname].action()} className="flex items-center bg-sky-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-sky-600"><Plus className="h-5 w-5 mr-2" /><span className="font-semibold">{buttonInfo[location.pathname].label}</span></button>)}
@@ -560,7 +532,7 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
     );
 };
 
-const Dashboard = ({ partners, deals, recentActivities, onEdit, onDelete }) => {
+const Dashboard = ({ partners, deals }) => {
     const { totalPayments, totalGeneratedRevenue } = useMemo(() => {
         const totalPayments = partners.reduce((sum, p) => sum + p.paymentsReceived, 0);
         const totalGeneratedRevenue = partners.reduce((sum, p) => sum + p.generatedRevenue, 0);
@@ -568,15 +540,9 @@ const Dashboard = ({ partners, deals, recentActivities, onEdit, onDelete }) => {
     }, [partners]);
     const stats = [ { title: 'Total de Parceiros', value: partners.length, icon: Users, color: 'text-blue-500' }, { title: 'Oportunidades no Período', value: deals.length, icon: Briefcase, color: 'text-orange-500' }, { title: 'Receita Gerada (Ganhos)', value: formatCurrency(totalGeneratedRevenue), icon: Target, color: 'text-indigo-500' }, { title: 'Pagamentos Recebidos', value: formatCurrency(totalPayments), icon: DollarSign, color: 'text-green-500' }, ];
     return ( 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">{stats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div>
-                <div className="mt-6"><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} partners={partners} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div>
-            </div>
-            <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-md">
-                <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><TrendingUp className="mr-2"/>Atividades Recentes</h2>
-                <ActivityFeed activities={recentActivities} onEdit={onEdit} onDelete={onDelete} />
-            </div>
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">{stats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div>
+            <div><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} partners={partners} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div>
         </div> 
     );
 };
@@ -613,9 +579,9 @@ const usePagination = (data, itemsPerPage = 10) => {
 const PartnerList = ({ partners, onEdit, onDelete }) => {
     const navigate = useNavigate();
     const [paginatedPartners, PaginatorComponent] = usePagination(partners);
-
+    
     return (
-    <div className="bg-white rounded-xl shadow-md">
+    <div className="bg-white rounded-xl shadow-md overflow-hidden">
         <div className="overflow-x-auto">
             <table className="w-full text-left">
                 <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4 font-semibold text-slate-600">Nome do Parceiro</th><th className="p-4 font-semibold text-slate-600">Tipo</th><th className="p-4 font-semibold text-slate-600">Nível</th><th className="p-4 font-semibold text-slate-600">Pagamentos Recebidos</th><th className="p-4 font-semibold text-slate-600">Receita Gerada (Ganhos)</th><th className="p-4 font-semibold text-slate-600">Comissão a Pagar</th><th className="p-4 font-semibold text-slate-600">Ações</th></tr></thead>
@@ -634,15 +600,14 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
                 </tbody>
             </table>
         </div>
-         {partners.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum parceiro registado.</p>}
+         {partners.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum parceiro registrado.</p>}
          <PaginatorComponent />
     </div>
 )};
 
-const PartnerDetail = ({ allPartners, allActivities, openModal, handleDeleteActivity }) => {
+const PartnerDetail = ({ allPartners }) => {
     const { partnerId } = useParams();
     const partner = allPartners.find(p => p.id === partnerId);
-    const partnerActivities = useMemo(() => allActivities.filter(a => a.partnerId === partnerId), [allActivities, partnerId]);
     if (!partner) return <div className="text-center text-gray-500">Parceiro não encontrado.</div>;
     return (
         <div>
@@ -659,13 +624,6 @@ const PartnerDetail = ({ allPartners, allActivities, openModal, handleDeleteActi
                         <div><p className="text-sm text-gray-500">Taxa de Conversão</p><p className="text-2xl font-bold text-slate-800">{partner.conversionRate.toFixed(1)}%</p></div>
                     </div>
                 </div>
-            </div>
-            <div className="mt-6 bg-white p-6 rounded-xl shadow-md">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-slate-700">Histórico de Atividades</h3>
-                    <button onClick={() => openModal('activity', partner)} className="flex items-center bg-sky-100 text-sky-700 px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-sky-200"><Plus size={16} className="mr-2"/>Adicionar Atividade</button>
-                </div>
-                <ActivityFeed activities={partnerActivities} onEdit={(activity) => openModal('activity', activity)} onDelete={handleDeleteActivity} />
             </div>
         </div>
     );
@@ -688,13 +646,13 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
         const map = {};
         partners.forEach(p => { map[p.id] = p.name; });
         return map;
-}, [partners]);
+    }, [partners]);
 
-return (
-    <div className={!isMini ? "bg-white rounded-xl shadow-md" : ""}>
-        <div className="overflow-x-auto">
-            <table className="w-full text-left">
-                <thead className={!isMini ? "bg-slate-50 border-b border-slate-200" : ""}>
+    return (
+        <div className={!isMini ? "bg-white rounded-xl shadow-md" : ""}>
+            <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                    <thead className={!isMini ? "bg-slate-50 border-b border-slate-200" : ""}>
                         <tr>
                             {!isMini && <th className="p-4"><input type="checkbox" onChange={handleSelectAll} checked={paginatedDeals.length > 0 && selectedDeals.length === paginatedDeals.length} className="rounded" /></th>}
                             {!isMini && <th className="p-4 font-semibold text-slate-600">Data</th>}
@@ -708,12 +666,12 @@ return (
                     <tbody>
                         {paginatedDeals.map(d => (<tr key={d.id} className={`border-b border-slate-100 ${selectedDeals.includes(d.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
                             {!isMini && <td className="p-4"><input type="checkbox" checked={selectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
-                            {!isMini && <td className="p-4 text-slate-600">{d.submissionDate && typeof d.submissionDate.toDate === 'function' ? d.submissionDate.toDate().toLocaleDateString('pt-BR') : 'N/A'}</td>}
+                            {!isMini && <td className="p-4 text-slate-600">{d.submissionDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td>}
                             <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
                             <td className="p-4 text-slate-600">{partnerNameMap[d.partnerId] || d.partnerName || 'Desconhecido'}</td>
                             <td className="p-4 text-slate-600">{formatCurrency(parseBrazilianCurrency(d.value))}</td>
                             <td className="p-4"><span className={`px-2 py-1 rounded-full text-sm font-semibold ${statusColors[d.status] || 'bg-gray-100'}`}>{d.status}</span></td>
-                            {!isMini && <td className="p-4 relative"><ActionsMenu onEdit={() => onEdit(d)} onDelete={() => onDelete('deals', d.id)} /></td>}
+                            {!isMini && <td className="p-4 relative"><ActionsMenu onEdit={() => onEdit('deal', d)} onDelete={() => onDelete('deals', d.id)} /></td>}
                         </tr>))}
                     </tbody>
                 </table>
@@ -761,46 +719,9 @@ const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => ( <div classNam
 const ActionsMenu = ({ onEdit, onDelete }) => {
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef(null);
-
-    useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (menuRef.current && !menuRef.current.contains(e.target)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, []);
-
-    return (
-        <div className="relative" ref={menuRef}>
-            <button onClick={(e) => {e.stopPropagation(); setIsOpen(!isOpen)}} className="p-2 rounded-full hover:bg-gray-200">
-                <MoreVertical size={18} />
-            </button>
-            {isOpen && (
-                <div 
-                    className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 border"
-                >
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onEdit(); setIsOpen(false); }} 
-                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                    >
-                        <Edit size={16} className="mr-2" /> Editar
-                    </button>
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); onDelete(); setIsOpen(false); }} 
-                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"
-                    >
-                        <Trash2 size={16} className="mr-2" /> Excluir
-                    </button>
-                </div>
-            )}
-        </div>
-    );
+    useEffect(() => { const handleClickOutside = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setIsOpen(false); }; document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside); }, []);
+    return (<div className="relative" ref={menuRef}><button onClick={() => setIsOpen(!isOpen)} className="p-2 rounded-full hover:bg-gray-200"><MoreVertical size={18} /></button>{isOpen && (<div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 border"><button onClick={(e) => { e.stopPropagation(); onEdit(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"><Edit size={16} className="mr-2" /> Editar</button><button onClick={(e) => { e.stopPropagation(); onDelete(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"><Trash2 size={16} className="mr-2" /> Excluir</button></div>)}</div>);
 };
-
 const ConfirmationModal = ({ onConfirm, onCancel, title = "Confirmar Exclusão", message = "Tem a certeza de que deseja excluir este item? Esta ação não pode ser desfeita." }) => (<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center"><div className="mx-auto bg-red-100 rounded-full h-12 w-12 flex items-center justify-center"><AlertTriangle className="h-6 w-6 text-red-600" /></div><h3 className="text-lg font-medium text-gray-900 mt-4">{title}</h3><p className="text-sm text-gray-500 mt-2">{message}</p><div className="mt-6 flex justify-center gap-4"><button onClick={onCancel} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-semibold">Cancelar</button><button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold">Confirmar Exclusão</button></div></div></div>);
 
 const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, partners, initialData }) => {
@@ -811,14 +732,13 @@ const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, p
             case 'deal': return <DealForm onSubmit={isEditMode ? handleUpdate : handleAdd} partners={partners} initialData={initialData} />;
             case 'resource': return <ResourceForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'nurturing': return <NurturingForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
-            case 'activity': return <ActivityForm handleAdd={handleAdd} handleUpdate={handleUpdate} initialData={initialData} />;
             case 'importPayments': return <ImportForm collectionName="payments" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importPartners': return <ImportForm collectionName="partners" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importDeals': return <ImportForm collectionName="deals" partners={partners} onSubmit={handleImport} closeModal={closeModal} />;
             default: return null;
         }
     };
-    const titles = { partner: isEditMode ? 'Editar Parceiro' : 'Adicionar Parceiro', deal: isEditMode ? 'Editar Oportunidade' : 'Registrar Oportunidade', resource: isEditMode ? 'Editar Recurso' : 'Adicionar Recurso', nurturing: isEditMode ? 'Editar Conteúdo' : 'Adicionar Conteúdo', activity: initialData?.hasOwnProperty('description') ? 'Editar Atividade' : 'Adicionar Atividade', importPayments: 'Importar Planilha de Pagamentos', importPartners: 'Importar Planilha de Parceiros', importDeals: 'Importar Planilha de Oportunidades' };
+    const titles = { partner: isEditMode ? 'Editar Parceiro' : 'Adicionar Parceiro', deal: isEditMode ? 'Editar Oportunidade' : 'Registrar Oportunidade', resource: isEditMode ? 'Editar Recurso' : 'Adicionar Recurso', nurturing: isEditMode ? 'Editar Conteúdo' : 'Adicionar Conteúdo', importPayments: 'Importar Planilha de Pagamentos', importPartners: 'Importar Planilha de Parceiros', importDeals: 'Importar Planilha de Oportunidades' };
     return (<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-lg"><div className="flex justify-between items-center p-4 border-b"><h2 className="text-xl font-bold text-slate-800">{titles[modalType]}</h2><button onClick={closeModal} className="text-gray-400 hover:text-gray-600"><X className="h-6 w-6" /></button></div><div className="p-6">{renderForm()}</div></div></div>);
 };
 
@@ -836,13 +756,7 @@ const PartnerForm = ({ onSubmit, initialData }) => {
 };
 
 const DealForm = ({ onSubmit, partners, initialData }) => {
-    const getSafeSubmissionDate = () => {
-        if (initialData?.submissionDate && typeof initialData.submissionDate.toDate === 'function') {
-            return initialData.submissionDate.toDate().toISOString().split('T')[0];
-        }
-        return new Date().toISOString().split('T')[0];
-    };
-    const [formData, setFormData] = useState({ clientName: initialData?.clientName || '', partnerId: initialData?.partnerId || '', submissionDate: getSafeSubmissionDate(), value: initialData?.value || '', status: initialData?.status || 'Pendente' });
+    const [formData, setFormData] = useState({ clientName: initialData?.clientName || '', partnerId: initialData?.partnerId || '', submissionDate: initialData?.submissionDate?.toDate().toISOString().split('T')[0] || new Date().toISOString().split('T')[0], value: initialData?.value || '', status: initialData?.status || 'Pendente' });
     const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
     const handleSubmit = (e) => { e.preventDefault(); const selectedPartner = partners.find(p => p.id === formData.partnerId); const dataToSubmit = { ...formData, value: parseBrazilianCurrency(formData.value), partnerName: selectedPartner ? selectedPartner.name : 'N/A' }; if (initialData) onSubmit('deals', initialData.id, dataToSubmit); else onSubmit('deals', dataToSubmit); };
     return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="clientName" name="clientName" label="Nome do Cliente Final" value={formData.clientName} onChange={handleChange} required /><FormSelect id="partnerId" name="partnerId" label="Parceiro Responsável" value={formData.partnerId} onChange={handleChange} required><option value="">Selecione um parceiro</option>{partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</FormSelect><FormInput id="submissionDate" name="submissionDate" label="Data da Indicação" type="date" value={formData.submissionDate} onChange={handleChange} required /><FormInput id="value" name="value" label="Valor Estimado (R$)" type="text" value={formData.value} onChange={handleChange} required placeholder="Ex: 1.250,50" /><FormSelect id="status" name="status" label="Status" value={formData.status} onChange={handleChange} required><option>Pendente</option><option>Aprovado</option><option>Ganho</option><option>Perdido</option></FormSelect><FormButton>{initialData ? 'Salvar Alterações' : 'Registrar Oportunidade'}</FormButton></form>);
@@ -912,7 +826,7 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
             )}
 
             <div>
-                <label htmlFor="csv-upload" className="block text-sm font-medium text-gray-700 mb-2">Selecione um ficheiro .csv</label>
+                <label htmlFor="csv-upload" className="block text-sm font-medium text-gray-700 mb-2">Selecione um arquivo .csv</label>
                 <input id="csv-upload" type="file" accept=".csv" onChange={(e) => setFile(e.target.files[0])} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:font-semibold file:bg-sky-50 file:text-sky-700 hover:file:bg-sky-100"/>
             </div>
             {importStatus && <p className="text-sm text-center font-medium text-gray-600">{importStatus}</p>}
@@ -920,135 +834,4 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
         </form>
     );
 };
-
-const ActivityForm = ({ handleAdd, handleUpdate, initialData }) => {
-    const isEditMode = initialData?.hasOwnProperty('description'); 
-    
-    const [formData, setFormData] = useState({ 
-      type: isEditMode ? initialData.type : 'Reunião', 
-      description: isEditMode ? initialData.description : '' 
-    });
-
-    const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        if (isEditMode) {
-            const dataToUpdate = {
-                type: formData.type,
-                description: formData.description,
-            };
-            handleUpdate('activities', initialData.id, dataToUpdate);
-        } else {
-            const dataToSave = {
-                ...formData,
-                partnerId: initialData.id,
-                partnerName: initialData.name,
-            };
-            handleAdd('activities', dataToSave);
-        }
-    };
-
-    const partnerName = isEditMode ? initialData.partnerName : initialData.name;
-    const buttonText = isEditMode ? 'Salvar Alterações' : 'Adicionar Atividade';
-    
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <h3 className="text-lg font-medium text-gray-800">Parceiro: {partnerName}</h3>
-            <FormSelect id="type" name="type" label="Tipo de Atividade" value={formData.type} onChange={handleChange} required>
-                <option>Reunião</option>
-                <option>Ligação</option>
-                <option>Email</option>
-                <option>Marco</option>
-            </FormSelect>
-            <FormTextarea id="description" name="description" label="Descrição / Resumo" value={formData.description} onChange={handleChange} required />
-            <FormButton>{buttonText}</FormButton>
-        </form>
-    );
-};
-
-
-const ActivityFeed = ({ activities, onEdit, onDelete }) => {
-    const activityIcons = { 'Reunião': Calendar, 'Ligação': Phone, 'Email': Mail, 'Marco': Award };
-    const timeSince = (timestamp) => {
-        if (!timestamp || !timestamp.toDate) return 'data inválida';
-        const date = timestamp.toDate();
-        const seconds = Math.floor((new Date() - date) / 1000);
-        let interval = seconds / 31536000; if (interval > 1) return `há ${Math.floor(interval)} anos`;
-        interval = seconds / 2592000; if (interval > 1) return `há ${Math.floor(interval)} meses`;
-        interval = seconds / 86400; if (interval > 1) return `há ${Math.floor(interval)} dias`;
-        interval = seconds / 3600; if (interval > 1) return `há ${Math.floor(interval)} horas`;
-        interval = seconds / 60; if (interval > 1) return `há ${Math.floor(interval)} minutos`;
-        return "agora mesmo";
-    };
-    if (activities.length === 0) return <p className="text-center text-gray-500 text-sm mt-4">Nenhuma atividade registada.</p>;
-    return (
-        <div className="space-y-4">
-            {activities.map(activity => {
-                const Icon = activityIcons[activity.type] || FileText;
-                return (
-                    <div key={activity.id} className="flex gap-4 group p-2 -mx-2 rounded-md hover:bg-slate-50">
-                        <div className="flex-shrink-0 w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center"><Icon className="h-5 w-5 text-gray-500" /></div>
-                        <div className="flex-grow">
-                            <p className="text-sm text-gray-800">{activity.description}</p>
-                            <p className="text-xs text-gray-500"><strong>{activity.partnerName}</strong> - {timeSince(activity.createdAt)}</p>
-                        </div>
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity"><ActionsMenu onEdit={() => onEdit(activity)} onDelete={() => onDelete(activity.id)} /></div>
-                    </div>
-                );
-            })}
-        </div>
-    );
-};
-
-// --- Componente Principal da Aplicação (Wrapper) ---
-const App = () => {
-    const [authInstance, setAuthInstance] = useState(null);
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js';
-        script.async = true;
-        document.head.appendChild(script);
-
-        try {
-            if (firebaseConfig.apiKey && firebaseConfig.projectId) {
-                const app = initializeApp(firebaseConfig);
-                const auth = getAuth(app);
-                setAuthInstance(auth);
-                const unsubscribe = onAuthStateChanged(auth, (user) => {
-                    setUser(user);
-                    setLoading(false);
-                });
-                return () => {
-                    unsubscribe();
-                    if (document.head.contains(script)) {
-                        document.head.removeChild(script);
-                    }
-                };
-            } else {
-                console.error("Firebase config is missing!");
-                setLoading(false);
-            }
-        } catch (error) {
-            console.error("Erro na inicialização do Firebase:", error);
-            setLoading(false);
-        }
-    }, []);
-
-    if (loading) {
-        return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-semibold text-gray-700">A carregar...</div></div>;
-    }
-    
-    if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-        return <div className="flex items-center justify-center h-screen bg-red-50 text-red-800 p-8"><div className="text-center"><h2 className="text-2xl font-bold mb-4">Erro de Configuração</h2><p>As chaves do Firebase não foram encontradas. Verifique as variáveis de ambiente.</p></div></div>;
-    }
-
-    return user ? <PrmApp auth={authInstance} /> : <LoginPage auth={authInstance} />;
-}
-
-
-export default App;
 
