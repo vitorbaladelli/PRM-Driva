@@ -29,7 +29,7 @@ import {
     Users, Briefcase, DollarSign, Book, Plus, X, LayoutDashboard, Gem, Trophy, Star,
     Upload, Filter, XCircle, MoreVertical, Edit, Trash2, AlertTriangle,
     BadgePercent, ArrowLeft, User, TrendingUp, Target, LogOut, Handshake, Lightbulb,
-    ChevronLeft, ChevronRight
+    ChevronLeft, ChevronRight, Activity as ActivityIcon, Calendar, Tag, FileText
 } from 'lucide-react';
 
 // --- Configuração do Firebase ---
@@ -157,6 +157,7 @@ function PrmApp({ auth }) {
     const [payments, setPayments] = useState([]);
     const [resources, setResources] = useState([]);
     const [nurturingContent, setNurturingContent] = useState([]);
+    const [activities, setActivities] = useState([]); // <<< NOVO: State para atividades
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalType, setModalType] = useState('');
     const [itemToEdit, setItemToEdit] = useState(null);
@@ -182,6 +183,7 @@ function PrmApp({ auth }) {
             resources: { setter: setResources },
             nurturing: { setter: setNurturingContent },
             payments: { setter: setPayments },
+            activities: { setter: setActivities }, // <<< NOVO: Carregar atividades
         };
         const unsubscribers = Object.entries(collectionsConfig).map(([col, config]) => {
             const collectionPath = `artifacts/${appId}/public/data/${col}`;
@@ -393,6 +395,7 @@ function PrmApp({ auth }) {
                             <Dashboard
                                 partners={partnersWithDetails}
                                 deals={filteredDeals}
+                                activities={activities} // <<< NOVO: Passar atividades
                             />}
                         />
                         <Route path="/partners" element={
@@ -405,6 +408,10 @@ function PrmApp({ auth }) {
                         <Route path="/partners/:partnerId" element={
                             <PartnerDetail
                                 allPartners={partnersWithDetails}
+                                allActivities={activities} // <<< NOVO: Passar atividades
+                                onAddActivity={openModal}
+                                onDeleteActivity={handleDelete}
+                                onEditActivity={openModal}
                             />}
                         />
                         <Route path="/opportunities" element={
@@ -505,7 +512,7 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
     const viewTitles = {
         '/': 'Dashboard de Canais',
         '/partners': 'Gestão de Parceiros',
-        '/opportunities': 'Oportunidades', // <<< MUDANÇA 3: Título alterado
+        '/opportunities': 'Oportunidades',
         '/commissioning': 'Cálculo de Comissionamento',
         '/resources': 'Central de Recursos',
         '/nurturing': 'Nutrição de Parceiros',
@@ -514,7 +521,7 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
     const currentTitle = isDetailView ? viewTitles.detail : (viewTitles[location.pathname] || 'PRM Driva');
     const buttonInfo = {
         '/partners': { label: 'Novo Parceiro', action: () => openModal('partner') },
-        '/opportunities': { label: 'Registrar Oportunidade', action: () => openModal('deal') }, // <<< MUDANÇA 1: Botão Adicionar
+        '/opportunities': { label: 'Registrar Oportunidade', action: () => openModal('deal') },
         '/resources': { label: 'Novo Recurso', action: () => openModal('resource') },
         '/nurturing': { label: 'Novo Conteúdo', action: () => openModal('nurturing') },
     };
@@ -526,17 +533,10 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">{currentTitle}</h1>
                 <div className="flex items-center gap-2">
                     {location.pathname === '/partners' && (<button onClick={() => openModal('importPartners')} className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Parceiros</span></button>)}
-                    
-                    {/* --- MUDANÇA 4: Botão de excluir aparece quando itens são selecionados --- */}
                     {location.pathname === '/opportunities' && selectedDealsCount > 0 && (<button onClick={onBulkDeleteDeals} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDealsCount})</span></button>)}
-                    
-                    {/* --- MUDANÇA 2: Botão de importar oportunidades --- */}
                     {location.pathname === '/opportunities' && (<button onClick={() => openModal('importDeals')} className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Oportunidades</span></button>)}
-                    
                     {location.pathname === '/commissioning' && selectedPaymentsCount > 0 && (<button onClick={onBulkDeletePayments} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedPaymentsCount})</span></button>)}
                     {location.pathname === '/commissioning' && (<button onClick={() => openModal('importPayments')} className="flex items-center bg-green-500 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-green-600"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Pagamentos</span></button>)}
-                    
-                    {/* Botão principal de Ação (Adicionar/Registrar) */}
                     {buttonInfo[location.pathname] && (<button onClick={() => buttonInfo[location.pathname].action()} className="flex items-center bg-sky-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-sky-600"><Plus className="h-5 w-5 mr-2" /><span className="font-semibold">{buttonInfo[location.pathname].label}</span></button>)}
                 </div>
             </div>
@@ -552,7 +552,47 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
     );
 };
 
-const Dashboard = ({ partners, deals }) => {
+// <<< NOVO: Componente para exibir atividades recentes no Dashboard
+const RecentActivities = ({ activities, partners }) => {
+    const partnerNameMap = useMemo(() => {
+        const map = {};
+        partners.forEach(p => { map[p.id] = p.name; });
+        return map;
+    }, [partners]);
+
+    return (
+        <div>
+            <h2 className="text-xl font-bold text-slate-700 mb-4">Últimas Atividades</h2>
+            <div className="bg-white p-4 rounded-xl shadow-md">
+                {activities.length === 0 ? (
+                    <p className="p-4 text-center text-gray-500">Nenhuma atividade registrada.</p>
+                ) : (
+                    <ul className="divide-y divide-slate-100">
+                        {activities.slice(0, 5).map(activity => (
+                             <li key={activity.id} className="p-3 flex items-start space-x-4">
+                                <div className="bg-sky-100 rounded-full p-2">
+                                    <ActivityIcon className="h-5 w-5 text-sky-600" />
+                                </div>
+                                <div>
+                                    <p className="font-semibold text-slate-800">{activity.title}</p>
+                                    <p className="text-sm text-slate-500">
+                                        Parceiro: <span className="font-medium text-slate-600">{partnerNameMap[activity.partnerId] || 'Desconhecido'}</span>
+                                    </p>
+                                    <p className="text-sm text-slate-400">
+                                        {activity.createdAt?.toDate().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                                    </p>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+        </div>
+    );
+};
+
+
+const Dashboard = ({ partners, deals, activities }) => {
     const { totalPayments, totalGeneratedRevenue } = useMemo(() => {
         const totalPayments = partners.reduce((sum, p) => sum + p.paymentsReceived, 0);
         const totalGeneratedRevenue = partners.reduce((sum, p) => sum + p.generatedRevenue, 0);
@@ -562,7 +602,10 @@ const Dashboard = ({ partners, deals }) => {
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">{stats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div>
-            <div><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} partners={partners} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} partners={partners} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div>
+                <RecentActivities activities={activities} partners={partners} />
+            </div>
         </div>
     );
 };
@@ -630,10 +673,44 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
     </div>
 )};
 
-const PartnerDetail = ({ allPartners }) => {
+// <<< NOVO: Componente para listar as atividades de um parceiro
+const ActivityList = ({ activities, onEdit, onDelete }) => {
+    return (
+        <div className="space-y-4">
+            {activities.length === 0 ? (
+                <p className="py-4 text-center text-gray-500">Nenhuma atividade registrada para este parceiro.</p>
+            ) : (
+                activities.map(activity => (
+                    <div key={activity.id} className="bg-slate-50 p-4 rounded-lg relative">
+                         <div className="absolute top-2 right-2">
+                            <ActionsMenu onEdit={() => onEdit('activity', activity)} onDelete={() => onDelete('activities', activity.id)} />
+                        </div>
+                        <div className="flex items-center mb-2">
+                             <h4 className="text-md font-bold text-slate-800 pr-8">{activity.title}</h4>
+                        </div>
+                        <div className="flex items-center text-sm text-gray-500 space-x-4 mb-2">
+                            <span className="flex items-center"><Tag size={14} className="mr-1" />{activity.category}</span>
+                            <span className="flex items-center"><Calendar size={14} className="mr-1" />{activity.createdAt?.toDate().toLocaleDateString('pt-BR')}</span>
+                        </div>
+                        <p className="text-slate-600 whitespace-pre-wrap">{activity.description}</p>
+                    </div>
+                ))
+            )}
+        </div>
+    );
+};
+
+
+const PartnerDetail = ({ allPartners, allActivities, onAddActivity, onDeleteActivity, onEditActivity }) => {
     const { partnerId } = useParams();
     const partner = allPartners.find(p => p.id === partnerId);
+    
+    const partnerActivities = useMemo(() => {
+        return allActivities.filter(a => a.partnerId === partnerId);
+    }, [allActivities, partnerId]);
+
     if (!partner) return <div className="text-center text-gray-500">Parceiro não encontrado.</div>;
+
     return (
         <div>
             <Link to="/partners" className="flex items-center text-sky-600 hover:underline mb-6 font-semibold"><ArrowLeft size={18} className="mr-2" />Voltar para a lista de parceiros</Link>
@@ -650,11 +727,18 @@ const PartnerDetail = ({ allPartners }) => {
                     </div>
                 </div>
             </div>
+            {/* <<< NOVO: Seção de Atividades no Perfil do Parceiro */}
+            <div className="mt-6 bg-white p-6 rounded-xl shadow-md">
+                 <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold text-slate-700 flex items-center"><ActivityIcon size={20} className="mr-2 text-sky-500" />Atividades</h3>
+                    <button onClick={() => onAddActivity('activity', { partnerId: partner.id, partnerName: partner.name })} className="flex items-center bg-sky-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-sky-600"><Plus className="h-5 w-5 mr-2" /><span className="font-semibold">Adicionar Atividade</span></button>
+                </div>
+                <ActivityList activities={partnerActivities} onEdit={onEditActivity} onDelete={onDeleteActivity} />
+            </div>
         </div>
     );
 };
 
-// --- MUDANÇA 4: Funcionalidade de seleção/exclusão já estava implementada aqui
 const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelectedDeals, isMini = false }) => {
     const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
 
@@ -758,6 +842,7 @@ const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, p
             case 'deal': return <DealForm onSubmit={isEditMode ? handleUpdate : handleAdd} partners={partners} initialData={initialData} />;
             case 'resource': return <ResourceForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'nurturing': return <NurturingForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
+            case 'activity': return <ActivityForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />; // <<< NOVO: formulário de atividade
             case 'importPayments': return <ImportForm collectionName="payments" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importPartners': return <ImportForm collectionName="partners" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importDeals': return <ImportForm collectionName="deals" partners={partners} onSubmit={handleImport} closeModal={closeModal} />;
@@ -769,6 +854,7 @@ const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, p
         deal: isEditMode ? 'Editar Oportunidade' : 'Registrar Oportunidade',
         resource: isEditMode ? 'Editar Recurso' : 'Adicionar Recurso',
         nurturing: isEditMode ? 'Editar Conteúdo' : 'Adicionar Conteúdo',
+        activity: isEditMode ? 'Editar Atividade' : 'Adicionar Atividade', // <<< NOVO: título do modal de atividade
         importPayments: 'Importar Planilha de Pagamentos',
         importPartners: 'Importar Planilha de Parceiros',
         importDeals: 'Importar Planilha de Oportunidades'
@@ -809,6 +895,40 @@ const NurturingForm = ({ onSubmit, initialData }) => {
     const handleSubmit = (e) => { e.preventDefault(); if (initialData?.id) onSubmit('nurturing', initialData.id, formData); else onSubmit('nurturing', formData); };
     return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="title" name="title" label="Título do Conteúdo" value={formData.title} onChange={handleChange} required /><FormTextarea id="content" name="content" label="Conteúdo/Direcionamento" value={formData.content} onChange={handleChange} required /><FormButton>{initialData?.id ? 'Salvar Alterações' : 'Publicar Conteúdo'}</FormButton></form>);
 };
+
+// <<< NOVO: Formulário para adicionar e editar atividades
+const ActivityForm = ({ onSubmit, initialData }) => {
+    const [formData, setFormData] = useState({
+        title: initialData?.title || '',
+        description: initialData?.description || '',
+        category: initialData?.category || 'Reunião',
+        partnerId: initialData?.partnerId,
+        partnerName: initialData?.partnerName
+    });
+    const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (initialData?.id) {
+            onSubmit('activities', initialData.id, formData);
+        } else {
+            onSubmit('activities', formData);
+        }
+    };
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <FormInput id="title" name="title" label="Título da Atividade" value={formData.title} onChange={handleChange} required />
+            <FormSelect id="category" name="category" label="Categoria" value={formData.category} onChange={handleChange} required>
+                <option>Reunião</option>
+                <option>Ligação</option>
+                <option>Email</option>
+                <option>Outro</option>
+            </FormSelect>
+            <FormTextarea id="description" name="description" label="Descrição" value={formData.description} onChange={handleChange} required />
+            <FormButton>{initialData?.id ? 'Salvar Alterações' : 'Salvar Atividade'}</FormButton>
+        </form>
+    );
+};
+
 
 const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
     const [file, setFile] = useState(null);
