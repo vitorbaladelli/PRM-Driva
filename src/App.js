@@ -69,7 +69,7 @@ const parseDateString = (dateString) => {
         const month = parts[1];
         const day = parts[0].length === 4 ? parts[2] : parts[0];
 
-        const date = new Date(`${year}-${month}-${day}T12:00:00Z`); // Use T12:00:00Z para evitar problemas de fuso horário
+        const date = new Date(`${year}-${month}-${day}T12:00:00Z`); // Use T12:00:00Z to avoid timezone issues
         if (isNaN(date.getTime())) return null;
         return Timestamp.fromDate(date);
     } catch (e) {
@@ -502,7 +502,7 @@ const Sidebar = ({ auth }) => {
 const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selectedDealsCount, onBulkDeleteDeals, selectedPaymentsCount, onBulkDeletePayments }) => {
     const location = useLocation();
     const isDetailView = location.pathname.includes('/partners/');
-    const viewTitles = { '/': 'Dashboard de Canais', '/partners': 'Gestão de Parceiros', '/deals': 'Registro de Oportunidades', '/commissioning': 'Cálculo de Comissionamento', '/resources': 'Central de Recursos', '/nurturing': 'Nutrição de Parceiros', detail: 'Detalhes do Parceiro' };
+    const viewTitles = { '/': 'Dashboard de Canais', '/partners': 'Gestão de Parceiros', '/deals': 'Oportunidades', '/commissioning': 'Cálculo de Comissionamento', '/resources': 'Central de Recursos', '/nurturing': 'Nutrição de Parceiros', detail: 'Detalhes do Parceiro' };
     const currentTitle = isDetailView ? viewTitles.detail : (viewTitles[location.pathname] || 'PRM Driva');
     const buttonInfo = { '/partners': { label: 'Novo Parceiro', action: () => openModal('partner') }, '/deals': { label: 'Registrar Oportunidade', action: () => openModal('deal') }, '/resources': { label: 'Novo Recurso', action: () => openModal('resource') }, '/nurturing': { label: 'Novo Conteúdo', action: () => openModal('nurturing') }, };
     const showFilters = ['/', '/partners', '/deals', '/commissioning'].includes(location.pathname) || isDetailView;
@@ -641,7 +641,7 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
 
     useEffect(() => {
         setSelectedDeals([]);
-    }, [currentPage, deals.length]);
+    }, [currentPage, deals.length, setSelectedDeals]);
     
     const handleSelectAll = (e) => setSelectedDeals(e.target.checked ? paginatedDeals.map(d => d.id) : []);
     const handleSelectOne = (e, id) => setSelectedDeals(e.target.checked ? [...selectedDeals, id] : selectedDeals.filter(dealId => dealId !== id));
@@ -692,7 +692,7 @@ const CommissioningList = ({ payments, partners, openModal, selectedPayments, se
     
     useEffect(() => {
         setSelectedPayments([]);
-    }, [currentPage, payments.length]);
+    }, [currentPage, payments.length, setSelectedPayments]);
     
     const handleSelectAll = (e) => setSelectedPayments(e.target.checked ? paginatedPayments.map(p => p.id) : []);
     const handleSelectOne = (e, id) => setSelectedPayments(e.target.checked ? [...selectedPayments, id] : selectedPayments.filter(pId => pId !== id));
@@ -847,26 +847,52 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
         </form>
     );
 };
-}
 
-{
-type: uploaded file
-fileName: vitorbaladelli/prm-driva/PRM-Driva-134d08a386428bdab74f2538c0c06a18199d13aa/src/index.js
-fullText:
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import './index.css';
-import App from './App';
-import { BrowserRouter } from 'react-router-dom';
+// --- Componente de Aplicação Principal (Wrapper) ---
+const App = () => {
+    const [authInstance, setAuthInstance] = useState(null);
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
-  </React.StrictMode>
-);
+    useEffect(() => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js';
+        script.async = true;
+        document.head.appendChild(script);
 
+        try {
+            if (Object.values(firebaseConfig).every(v => v)) {
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                setAuthInstance(auth);
+                const unsubscribe = onAuthStateChanged(auth, (user) => {
+                    setUser(user);
+                    setLoading(false);
+                });
+                return () => {
+                    unsubscribe();
+                    if (document.head.contains(script)) {
+                        document.head.removeChild(script);
+                    }
+                };
+            } else {
+                console.error("Firebase config is missing!");
+                setLoading(false);
+            }
+        } catch (error) {
+            console.error("Erro na inicialização do Firebase:", error);
+            setLoading(false);
+        }
+    }, []);
+
+    if (loading) {
+        return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-semibold text-gray-700">A carregar...</div></div>;
+    }
+    
+    if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+        return <div className="flex items-center justify-center h-screen bg-red-50 text-red-800 p-8"><div className="text-center"><h2 className="text-2xl font-bold mb-4">Erro de Configuração</h2><p>As chaves do Firebase não foram encontradas. Verifique as variáveis de ambiente.</p></div></div>;
+    }
+
+    return user ? <PrmApp auth={authInstance} /> : <LoginPage auth={authInstance} />;
 }
 
