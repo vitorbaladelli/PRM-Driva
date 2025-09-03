@@ -27,8 +27,8 @@ import {
 } from 'firebase/firestore';
 import { 
     Users, Briefcase, DollarSign, Book, Plus, X, LayoutDashboard, Gem, Trophy, Star,
-    Upload, Filter, XCircle, MoreVertical, Edit, Trash2, AlertTriangle,
-    BadgePercent, ArrowLeft, User, TrendingUp, Target, LogOut, Handshake, Lightbulb,
+    Handshake, Lightbulb, Upload, Filter, XCircle, MoreVertical, Edit, Trash2, AlertTriangle,
+    BadgePercent, ArrowLeft, User, TrendingUp, Target, Calendar, Phone, Mail, Award, LogOut, FileText,
     ChevronLeft, ChevronRight
 } from 'lucide-react';
 
@@ -64,12 +64,12 @@ const parseDateString = (dateString) => {
         const datePart = dateString.trim().split(' ')[0];
         const parts = datePart.split(/[-/]/);
         if (parts.length !== 3) return null;
-        // Assume AAAA-MM-DD or DD/MM/AAAA
+        // Assume AAAA-MM-DD ou DD/MM/AAAA
         const year = parts[0].length === 4 ? parts[0] : parts[2];
         const month = parts[1];
         const day = parts[0].length === 4 ? parts[2] : parts[0];
 
-        const date = new Date(`${year}-${month}-${day}T12:00:00Z`); // Use T12:00:00Z to avoid timezone issues
+        const date = new Date(`${year}-${month}-${day}T12:00:00Z`); // Use T12:00:00Z para evitar problemas de fuso horário
         if (isNaN(date.getTime())) return null;
         return Timestamp.fromDate(date);
     } catch (e) {
@@ -157,6 +157,7 @@ function PrmApp({ auth }) {
     const [payments, setPayments] = useState([]);
     const [resources, setResources] = useState([]);
     const [nurturingContent, setNurturingContent] = useState([]);
+    const [activities, setActivities] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalType, setModalType] = useState('');
     const [itemToEdit, setItemToEdit] = useState(null);
@@ -182,10 +183,13 @@ function PrmApp({ auth }) {
             resources: { setter: setResources }, 
             nurturing: { setter: setNurturingContent }, 
             payments: { setter: setPayments }, 
+            activities: { setter: setActivities, orderByField: 'createdAt' }
         };
         const unsubscribers = Object.entries(collectionsConfig).map(([col, config]) => {
             const collectionPath = `artifacts/${appId}/public/data/${col}`;
-            const q = query(collection(db, collectionPath), orderBy('createdAt', 'desc'));
+            const q = config.orderByField 
+                ? query(collection(db, collectionPath), orderBy(config.orderByField, 'desc'))
+                : query(collection(db, collectionPath));
             
             return onSnapshot(q, (snapshot) => {
                 const dataList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -264,6 +268,9 @@ function PrmApp({ auth }) {
             const dataToUpdate = {...data};
             if (data.submissionDate) {
                 dataToUpdate.submissionDate = parseDateString(data.submissionDate);
+            }
+             if (collectionName === 'activities') {
+                 dataToUpdate.updatedAt = serverTimestamp();
             }
             await updateDoc(docRef, dataToUpdate);
             closeModal();
@@ -392,7 +399,10 @@ function PrmApp({ auth }) {
                         <Route path="/" element={
                             <Dashboard 
                                 partners={partnersWithDetails} 
-                                deals={filteredDeals} 
+                                deals={filteredDeals}
+                                recentActivities={activities.slice(0, 5)} 
+                                onEdit={(activity) => openModal('activity', activity)} 
+                                onDelete={handleDelete}
                             />} 
                         />
                         <Route path="/partners" element={
@@ -405,6 +415,9 @@ function PrmApp({ auth }) {
                         <Route path="/partners/:partnerId" element={
                             <PartnerDetail 
                                 allPartners={partnersWithDetails} 
+                                allActivities={activities}
+                                openModal={openModal} 
+                                handleDeleteActivity={handleDelete} 
                             />} 
                         />
                         <Route path="/opportunities" element={
@@ -532,7 +545,7 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
     );
 };
 
-const Dashboard = ({ partners, deals }) => {
+const Dashboard = ({ partners, deals, recentActivities, onEdit, onDelete }) => {
     const { totalPayments, totalGeneratedRevenue } = useMemo(() => {
         const totalPayments = partners.reduce((sum, p) => sum + p.paymentsReceived, 0);
         const totalGeneratedRevenue = partners.reduce((sum, p) => sum + p.generatedRevenue, 0);
@@ -540,9 +553,15 @@ const Dashboard = ({ partners, deals }) => {
     }, [partners]);
     const stats = [ { title: 'Total de Parceiros', value: partners.length, icon: Users, color: 'text-blue-500' }, { title: 'Oportunidades no Período', value: deals.length, icon: Briefcase, color: 'text-orange-500' }, { title: 'Receita Gerada (Ganhos)', value: formatCurrency(totalGeneratedRevenue), icon: Target, color: 'text-indigo-500' }, { title: 'Pagamentos Recebidos', value: formatCurrency(totalPayments), icon: DollarSign, color: 'text-green-500' }, ];
     return ( 
-        <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">{stats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div>
-            <div><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} partners={partners} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">{stats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div>
+                <div className="mt-6"><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} partners={partners} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div>
+            </div>
+            <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-md">
+                <h2 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><TrendingUp className="mr-2"/>Atividades Recentes</h2>
+                <ActivityFeed activities={recentActivities} onEdit={onEdit} onDelete={onDelete} />
+            </div>
         </div> 
     );
 };
@@ -561,12 +580,17 @@ const Paginator = ({ currentPage, totalPages, onPageChange }) => {
 const usePagination = (data, itemsPerPage = 10) => {
     const [currentPage, setCurrentPage] = useState(1);
     const totalPages = Math.ceil(data.length / itemsPerPage);
-    const paginatedData = useMemo(() => data.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [data, currentPage, itemsPerPage]);
+    const paginatedData = useMemo(() => {
+        if (!Array.isArray(data)) return [];
+        return data.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    }, [data, currentPage, itemsPerPage]);
     
     useEffect(() => {
       if (currentPage > totalPages && totalPages > 0) {
         setCurrentPage(totalPages);
       } else if (currentPage < 1 && totalPages > 0) {
+        setCurrentPage(1);
+      } else if (data.length > 0 && totalPages > 0 && currentPage === 0) {
         setCurrentPage(1);
       }
     }, [data.length, totalPages, currentPage]);
@@ -605,10 +629,13 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
     </div>
 )};
 
-const PartnerDetail = ({ allPartners }) => {
+const PartnerDetail = ({ allPartners, allActivities, openModal, handleDeleteActivity }) => {
     const { partnerId } = useParams();
     const partner = allPartners.find(p => p.id === partnerId);
+    const partnerActivities = useMemo(() => allActivities.filter(a => a.partnerId === partnerId), [allActivities, partnerId]);
+    
     if (!partner) return <div className="text-center text-gray-500">Parceiro não encontrado.</div>;
+    
     return (
         <div>
             <Link to="/partners" className="flex items-center text-sky-600 hover:underline mb-6 font-semibold"><ArrowLeft size={18} className="mr-2" />Voltar para a lista de parceiros</Link>
@@ -625,6 +652,13 @@ const PartnerDetail = ({ allPartners }) => {
                     </div>
                 </div>
             </div>
+             <div className="mt-6 bg-white p-6 rounded-xl shadow-md">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold text-slate-700">Histórico de Atividades</h3>
+                    <button onClick={() => openModal('activity', partner)} className="flex items-center bg-sky-100 text-sky-700 px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-sky-200"><Plus size={16} className="mr-2"/>Adicionar Atividade</button>
+                </div>
+                <ActivityFeed activities={partnerActivities} onEdit={(activity) => openModal('activity', activity)} onDelete={handleDeleteActivity} />
+            </div>
         </div>
     );
 };
@@ -636,7 +670,7 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
 
     useEffect(() => {
         setSelectedDeals([]);
-    }, [currentPage, deals]);
+    }, [currentPage, deals.length]);
     
     const handleSelectAll = (e) => setSelectedDeals(e.target.checked ? paginatedDeals.map(d => d.id) : []);
     const handleSelectOne = (e, id) => setSelectedDeals(e.target.checked ? [...selectedDeals, id] : selectedDeals.filter(dealId => dealId !== id));
@@ -683,11 +717,11 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
 };
 
 const CommissioningList = ({ payments, partners, openModal, selectedPayments, setSelectedPayments }) => {
-    const [paginatedPayments, PaginatorComponent, currentPage] = usePagination(payments);
+    const [paginatedPayments, PaginatorComponent, currentPage, setCurrentPage] = usePagination(payments);
     
     useEffect(() => {
         setSelectedPayments([]);
-    }, [currentPage, payments]);
+    }, [currentPage, payments.length]);
     
     const handleSelectAll = (e) => setSelectedPayments(e.target.checked ? paginatedPayments.map(p => p.id) : []);
     const handleSelectOne = (e, id) => setSelectedPayments(e.target.checked ? [...selectedPayments, id] : selectedPayments.filter(pId => pId !== id));
@@ -732,6 +766,7 @@ const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, p
             case 'deal': return <DealForm onSubmit={isEditMode ? handleUpdate : handleAdd} partners={partners} initialData={initialData} />;
             case 'resource': return <ResourceForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'nurturing': return <NurturingForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
+            case 'activity': return <ActivityForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'importPayments': return <ImportForm collectionName="payments" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importPartners': return <ImportForm collectionName="partners" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importDeals': return <ImportForm collectionName="deals" partners={partners} onSubmit={handleImport} closeModal={closeModal} />;
@@ -743,6 +778,7 @@ const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, p
         deal: isEditMode ? 'Editar Oportunidade' : 'Registrar Oportunidade', 
         resource: isEditMode ? 'Editar Recurso' : 'Adicionar Recurso', 
         nurturing: isEditMode ? 'Editar Conteúdo' : 'Adicionar Conteúdo', 
+        activity: isEditMode ? 'Editar Atividade' : 'Adicionar Atividade',
         importPayments: 'Importar Planilha de Pagamentos', 
         importPartners: 'Importar Planilha de Parceiros', 
         importDeals: 'Importar Planilha de Oportunidades' 
@@ -842,4 +878,135 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
         </form>
     );
 };
+
+
+const ActivityForm = ({ onSubmit, initialData }) => {
+    // initialData in "add" mode is the partner object, in "edit" mode is the activity object.
+    const isEditMode = initialData?.hasOwnProperty('description'); 
+    
+    const [formData, setFormData] = useState({ 
+      type: isEditMode ? initialData.type : 'Reunião', 
+      description: isEditMode ? initialData.description : '' 
+    });
+
+    const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (isEditMode) {
+            // Editando uma atividade existente: onSubmit é a função handleUpdate
+            const dataToUpdate = {
+                type: formData.type,
+                description: formData.description,
+            };
+            onSubmit('activities', initialData.id, dataToUpdate);
+        } else {
+            // Adicionando uma nova atividade: onSubmit é a função handleAdd
+            // 'initialData' neste caso é o objeto do parceiro
+            const dataToSave = {
+                ...formData,
+                partnerId: initialData.id,
+                partnerName: initialData.name,
+            };
+            onSubmit('activities', dataToSave);
+        }
+    };
+
+    const partnerName = isEditMode ? initialData.partnerName : initialData.name;
+    
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+            <h3 className="text-lg font-medium text-gray-800">Parceiro: {partnerName}</h3>
+            <FormSelect id="type" name="type" label="Tipo de Atividade" value={formData.type} onChange={handleChange} required>
+                <option>Reunião</option>
+                <option>Ligação</option>
+                <option>Email</option>
+                <option>Marco</option>
+            </FormSelect>
+            <FormTextarea id="description" name="description" label="Descrição / Resumo" value={formData.description} onChange={handleChange} required />
+            <FormButton>{isEditMode ? 'Salvar Alterações' : 'Adicionar Atividade'}</FormButton>
+        </form>
+    );
+};
+
+const ActivityFeed = ({ activities, onEdit, onDelete }) => {
+    const activityIcons = { 'Reunião': Calendar, 'Ligação': Phone, 'Email': Mail, 'Marco': Award };
+    const timeSince = (timestamp) => {
+        if (!timestamp || !timestamp.toDate) return 'data inválida';
+        const date = timestamp.toDate();
+        const seconds = Math.floor((new Date() - date) / 1000);
+        let interval = seconds / 31536000; if (interval > 1) return `há ${Math.floor(interval)} anos`;
+        interval = seconds / 2592000; if (interval > 1) return `há ${Math.floor(interval)} meses`;
+        interval = seconds / 86400; if (interval > 1) return `há ${Math.floor(interval)} dias`;
+        interval = seconds / 3600; if (interval > 1) return `há ${Math.floor(interval)} horas`;
+        interval = seconds / 60; if (interval > 1) return `há ${Math.floor(interval)} minutos`;
+        return "agora mesmo";
+    };
+    if (activities.length === 0) return <p className="text-center text-gray-500 text-sm mt-4">Nenhuma atividade registrada.</p>;
+    return (
+        <div className="space-y-4">
+            {activities.map(activity => {
+                const Icon = activityIcons[activity.type] || FileText;
+                return (
+                    <div key={activity.id} className="flex gap-4 group p-2 -mx-2 rounded-md hover:bg-slate-50">
+                        <div className="flex-shrink-0 w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center"><Icon className="h-5 w-5 text-gray-500" /></div>
+                        <div className="flex-grow">
+                            <p className="text-sm text-gray-800">{activity.description}</p>
+                            <p className="text-xs text-gray-500"><strong>{activity.partnerName}</strong> - {timeSince(activity.createdAt)}</p>
+                        </div>
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity"><ActionsMenu onEdit={() => onEdit('activity', activity)} onDelete={() => onDelete('activities', activity.id)} /></div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+};
+
+// --- Componente de Aplicação Principal (Wrapper) ---
+const App = () => {
+    const [authInstance, setAuthInstance] = useState(null);
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js';
+        script.async = true;
+        document.head.appendChild(script);
+
+        try {
+            if (Object.values(firebaseConfig).every(v => v)) {
+                const app = initializeApp(firebaseConfig);
+                const auth = getAuth(app);
+                setAuthInstance(auth);
+                const unsubscribe = onAuthStateChanged(auth, (user) => {
+                    setUser(user);
+                    setLoading(false);
+                });
+                return () => {
+                    unsubscribe();
+                    if (document.head.contains(script)) {
+                        document.head.removeChild(script);
+                    }
+                };
+            } else {
+                console.error("Firebase config is missing!");
+                setLoading(false);
+            }
+        } catch (error) {
+            console.error("Erro na inicialização do Firebase:", error);
+            setLoading(false);
+        }
+    }, []);
+
+    if (loading) {
+        return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-semibold text-gray-700">A carregar...</div></div>;
+    }
+    
+    if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+        return <div className="flex items-center justify-center h-screen bg-red-50 text-red-800 p-8"><div className="text-center"><h2 className="text-2xl font-bold mb-4">Erro de Configuração</h2><p>As chaves do Firebase não foram encontradas. Verifique as variáveis de ambiente.</p></div></div>;
+    }
+
+    return user ? <PrmApp auth={authInstance} /> : <LoginPage auth={authInstance} />;
+}
 
