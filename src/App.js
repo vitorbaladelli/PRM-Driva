@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { initializeApp } from 'firebase/app';
-import { 
-    getAuth, 
+import {
+    getAuth,
     onAuthStateChanged,
     signInWithEmailAndPassword,
     signOut,
@@ -10,12 +10,12 @@ import {
     browserSessionPersistence,
     browserLocalPersistence
 } from 'firebase/auth';
-import { 
-    getFirestore, 
-    collection, 
-    addDoc, 
+import {
+    getFirestore,
+    collection,
+    addDoc,
     doc,
-    onSnapshot, 
+    onSnapshot,
     query,
     serverTimestamp,
     writeBatch,
@@ -25,7 +25,7 @@ import {
     orderBy,
     getDocs
 } from 'firebase/firestore';
-import { 
+import {
     Users, Briefcase, DollarSign, Book, Plus, X, LayoutDashboard, Gem, Trophy, Star,
     Upload, Filter, XCircle, MoreVertical, Edit, Trash2, AlertTriangle,
     BadgePercent, ArrowLeft, User, TrendingUp, Target, LogOut, Handshake, Lightbulb,
@@ -94,11 +94,11 @@ const TIER_CONFIG = {
 const getPartnerTierDetails = (paymentsReceived, type) => {
     const partnerType = type?.toUpperCase() || 'FINDER';
     const thresholds = TIER_THRESHOLDS[partnerType];
-    
+
     if (paymentsReceived > thresholds.DIAMANTE) return { ...TIER_CONFIG.DIAMANTE, commissionRate: TIER_CONFIG.DIAMANTE.commission[partnerType] };
     if (paymentsReceived > thresholds.OURO) return { ...TIER_CONFIG.OURO, commissionRate: TIER_CONFIG.OURO.commission[partnerType] };
     if (paymentsReceived >= TIER_THRESHOLDS.PRATA_MIN) return { ...TIER_CONFIG.PRATA, commissionRate: TIER_CONFIG.PRATA.commission[partnerType] };
-    
+
     return { name: 'N/A', icon: Users, color: 'text-slate-400', bgColor: 'bg-slate-100', commissionRate: 0 };
 };
 
@@ -176,17 +176,17 @@ function PrmApp({ auth }) {
     // --- Efeito para Carregar Dados do Firestore ---
     useEffect(() => {
         if (!db) return;
-        const collectionsConfig = { 
-            partners: { setter: setPartners }, 
-            deals: { setter: setDeals }, 
-            resources: { setter: setResources }, 
-            nurturing: { setter: setNurturingContent }, 
-            payments: { setter: setPayments }, 
+        const collectionsConfig = {
+            partners: { setter: setPartners },
+            deals: { setter: setDeals },
+            resources: { setter: setResources },
+            nurturing: { setter: setNurturingContent },
+            payments: { setter: setPayments },
         };
         const unsubscribers = Object.entries(collectionsConfig).map(([col, config]) => {
             const collectionPath = `artifacts/${appId}/public/data/${col}`;
             const q = query(collection(db, collectionPath), orderBy('createdAt', 'desc'));
-            
+
             return onSnapshot(q, (snapshot) => {
                 const dataList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 config.setter(dataList);
@@ -200,21 +200,21 @@ function PrmApp({ auth }) {
         if (!startDate && !endDate) return deals;
         const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
         const end = endDate ? new Date(`${endDate}T23:59:59`) : null;
-        return deals.filter(deal => { 
+        return deals.filter(deal => {
             if (!deal.submissionDate?.toDate) return false;
-            const dealDate = deal.submissionDate.toDate(); 
-            return dealDate && (!start || dealDate >= start) && (!end || dealDate <= end); 
+            const dealDate = deal.submissionDate.toDate();
+            return dealDate && (!start || dealDate >= start) && (!end || dealDate <= end);
         });
     }, [deals, startDate, endDate]);
-    
+
     const filteredPayments = useMemo(() => {
         if (!startDate && !endDate) return payments;
         const start = startDate ? new Date(`${startDate}T00:00:00`) : null;
         const end = endDate ? new Date(`${endDate}T23:59:59`) : null;
-        return payments.filter(payment => { 
+        return payments.filter(payment => {
              if (!payment.paymentDate?.toDate) return false;
-            const paymentDate = payment.paymentDate.toDate(); 
-            return paymentDate && (!start || paymentDate >= start) && (!end || paymentDate <= end); 
+            const paymentDate = payment.paymentDate.toDate();
+            return paymentDate && (!start || paymentDate >= start) && (!end || paymentDate <= end);
         });
     }, [payments, startDate, endDate]);
 
@@ -222,7 +222,7 @@ function PrmApp({ auth }) {
     const partnersWithDetails = useMemo(() => {
         const paymentsByPartner = filteredPayments.reduce((acc, p) => { acc[p.partnerId] = (acc[p.partnerId] || 0) + (parseBrazilianCurrency(p.paymentValue) || 0); return acc; }, {});
         const dealsByPartner = filteredDeals.reduce((acc, d) => { if (!acc[d.partnerId]) acc[d.partnerId] = []; acc[d.partnerId].push(d); return acc; }, {});
-        
+
         return partners.map(partner => {
             const paymentsReceived = paymentsByPartner[partner.id] || 0;
             const partnerDeals = dealsByPartner[partner.id] || [];
@@ -233,7 +233,7 @@ function PrmApp({ auth }) {
             const type = partner.type || 'Finder';
             const tierDetails = getPartnerTierDetails(paymentsReceived, type);
             const commissionToPay = paymentsReceived * (tierDetails.commissionRate / 100);
-            
+
             return { ...partner, paymentsReceived, tier: tierDetails, totalOpportunitiesValue, conversionRate, commissionToPay, generatedRevenue };
         });
     }, [partners, filteredDeals, filteredPayments]);
@@ -251,12 +251,12 @@ function PrmApp({ auth }) {
             if (data.submissionDate) {
                 dataWithTs.submissionDate = parseDateString(data.submissionDate);
             }
-            
+
             await addDoc(collection(db, path), dataWithTs);
             closeModal();
         } catch (e) { console.error("Erro ao adicionar:", e); }
     };
-    
+
     const handleUpdate = async (collectionName, id, data) => {
         if (!db) return;
         try {
@@ -281,7 +281,7 @@ function PrmApp({ auth }) {
             console.error("Erro ao excluir:", e);
         }
     };
-    
+
     const handleBulkDelete = (collectionName, ids) => {
         if(ids.length > 0) setBulkDeleteConfig({ collectionName, ids, title: `Excluir ${ids.length} itens?`, message: `Tem a certeza de que deseja excluir os ${ids.length} itens selecionados?` });
     };
@@ -298,7 +298,7 @@ function PrmApp({ auth }) {
             setBulkDeleteConfig(null);
         } catch (e) { console.error("Erro ao excluir em massa:", e); }
     };
-    
+
      const handleImport = async (file, collectionName, selectedPartnerIdForDeals) => {
         if (!file || !db) return;
         const partnersSnapshot = await getDocs(query(collection(db, `artifacts/${appId}/public/data/partners`)));
@@ -348,7 +348,7 @@ function PrmApp({ auth }) {
                                 isValid = !!dataToSet.paymentDate;
                             }
                         }
-                        
+
                         if (isValid) {
                             batch.set(newDocRef, dataToSet);
                             successfulImports++;
@@ -370,87 +370,87 @@ function PrmApp({ auth }) {
             });
         });
     };
-    
+
 
     return (
         <div className="flex h-screen bg-gray-50 font-sans">
             <Sidebar auth={auth} />
             <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-                <Header 
-                    openModal={openModal} 
-                    startDate={startDate} 
-                    endDate={endDate} 
-                    setStartDate={setStartDate} 
-                    setEndDate={setEndDate} 
-                    selectedDealsCount={selectedDeals.length} 
-                    onBulkDeleteDeals={() => handleBulkDelete('deals', selectedDeals)} 
-                    selectedPaymentsCount={selectedPayments.length} 
+                <Header
+                    openModal={openModal}
+                    startDate={startDate}
+                    endDate={endDate}
+                    setStartDate={setStartDate}
+                    setEndDate={setEndDate}
+                    selectedDealsCount={selectedDeals.length}
+                    onBulkDeleteDeals={() => handleBulkDelete('deals', selectedDeals)}
+                    selectedPaymentsCount={selectedPayments.length}
                     onBulkDeletePayments={() => handleBulkDelete('payments', selectedPayments)}
                 />
                 <div className="mt-6">
                     <Routes>
                         <Route path="/" element={
-                            <Dashboard 
-                                partners={partnersWithDetails} 
-                                deals={filteredDeals} 
-                            />} 
+                            <Dashboard
+                                partners={partnersWithDetails}
+                                deals={filteredDeals}
+                            />}
                         />
                         <Route path="/partners" element={
-                            <PartnerList 
-                                partners={partnersWithDetails} 
-                                onEdit={openModal} 
-                                onDelete={handleDelete} 
-                            />} 
+                            <PartnerList
+                                partners={partnersWithDetails}
+                                onEdit={openModal}
+                                onDelete={handleDelete}
+                            />}
                         />
                         <Route path="/partners/:partnerId" element={
-                            <PartnerDetail 
-                                allPartners={partnersWithDetails} 
-                            />} 
+                            <PartnerDetail
+                                allPartners={partnersWithDetails}
+                            />}
                         />
                         <Route path="/opportunities" element={
-                            <DealList 
-                                deals={filteredDeals} 
+                            <DealList
+                                deals={filteredDeals}
                                 partners={partners}
-                                onEdit={(d) => openModal('deal', d)} 
-                                onDelete={handleDelete} 
-                                selectedDeals={selectedDeals} 
-                                setSelectedDeals={setSelectedDeals} 
-                            />} 
+                                onEdit={(d) => openModal('deal', d)}
+                                onDelete={handleDelete}
+                                selectedDeals={selectedDeals}
+                                setSelectedDeals={setSelectedDeals}
+                            />}
                         />
                         <Route path="/commissioning" element={
-                            <CommissioningList 
-                                payments={filteredPayments} 
+                            <CommissioningList
+                                payments={filteredPayments}
                                 partners={partners}
                                 openModal={openModal}
-                                selectedPayments={selectedPayments} 
-                                setSelectedPayments={setSelectedPayments} 
-                            />} 
+                                selectedPayments={selectedPayments}
+                                setSelectedPayments={setSelectedPayments}
+                            />}
                         />
                         <Route path="/resources" element={
-                            <ResourceHub 
-                                resources={resources} 
-                                onEdit={(r) => openModal('resource', r)} 
+                            <ResourceHub
+                                resources={resources}
+                                onEdit={(r) => openModal('resource', r)}
                                 onDelete={handleDelete}
-                            />} 
+                            />}
                         />
                         <Route path="/nurturing" element={
-                            <NurturingHub 
-                                nurturingContent={nurturingContent} 
-                                onEdit={(i) => openModal('nurturing', i)} 
+                            <NurturingHub
+                                nurturingContent={nurturingContent}
+                                onEdit={(i) => openModal('nurturing', i)}
                                 onDelete={handleDelete}
-                            />} 
+                            />}
                         />
                     </Routes>
                 </div>
             </main>
-            {isModalOpen && <Modal 
-                closeModal={closeModal} 
-                modalType={modalType} 
-                handleAdd={handleAdd} 
-                handleUpdate={handleUpdate} 
-                handleImport={handleImport} 
-                partners={partners} 
-                initialData={itemToEdit} 
+            {isModalOpen && <Modal
+                closeModal={closeModal}
+                modalType={modalType}
+                handleAdd={handleAdd}
+                handleUpdate={handleUpdate}
+                handleImport={handleImport}
+                partners={partners}
+                initialData={itemToEdit}
             />}
             {itemToDelete && <ConfirmationModal onConfirm={confirmDelete} onCancel={() => setItemToDelete(null)} />}
             {bulkDeleteConfig && <ConfirmationModal onConfirm={confirmBulkDelete} onCancel={() => setBulkDeleteConfig(null)} title={bulkDeleteConfig.title} message={bulkDeleteConfig.message} />}
@@ -478,9 +478,9 @@ export default function AppWrapper() {
                     setLoading(false);
                 });
                 return () => { unsubscribe(); if (document.head.contains(script)) document.head.removeChild(script); };
-            } else { 
+            } else {
                 console.error("Firebase config is missing!");
-                setLoading(false); 
+                setLoading(false);
             }
         } catch (error) { console.error("Erro na inicialização do Firebase:", error); setLoading(false); }
     }, []);
@@ -502,21 +502,41 @@ const Sidebar = ({ auth }) => {
 const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selectedDealsCount, onBulkDeleteDeals, selectedPaymentsCount, onBulkDeletePayments }) => {
     const location = useLocation();
     const isDetailView = location.pathname.includes('/partners/');
-    const viewTitles = { '/': 'Dashboard de Canais', '/partners': 'Gestão de Parceiros', '/deals': 'Oportunidades', '/commissioning': 'Cálculo de Comissionamento', '/resources': 'Central de Recursos', '/nurturing': 'Nutrição de Parceiros', detail: 'Detalhes do Parceiro' };
+    const viewTitles = {
+        '/': 'Dashboard de Canais',
+        '/partners': 'Gestão de Parceiros',
+        '/opportunities': 'Oportunidades', // <<< MUDANÇA 3: Título alterado
+        '/commissioning': 'Cálculo de Comissionamento',
+        '/resources': 'Central de Recursos',
+        '/nurturing': 'Nutrição de Parceiros',
+        detail: 'Detalhes do Parceiro'
+    };
     const currentTitle = isDetailView ? viewTitles.detail : (viewTitles[location.pathname] || 'PRM Driva');
-    const buttonInfo = { '/partners': { label: 'Novo Parceiro', action: () => openModal('partner') }, '/deals': { label: 'Registrar Oportunidade', action: () => openModal('deal') }, '/resources': { label: 'Novo Recurso', action: () => openModal('resource') }, '/nurturing': { label: 'Novo Conteúdo', action: () => openModal('nurturing') }, };
-    const showFilters = ['/', '/partners', '/deals', '/commissioning'].includes(location.pathname) || isDetailView;
-    
+    const buttonInfo = {
+        '/partners': { label: 'Novo Parceiro', action: () => openModal('partner') },
+        '/opportunities': { label: 'Registrar Oportunidade', action: () => openModal('deal') }, // <<< MUDANÇA 1: Botão Adicionar
+        '/resources': { label: 'Novo Recurso', action: () => openModal('resource') },
+        '/nurturing': { label: 'Novo Conteúdo', action: () => openModal('nurturing') },
+    };
+    const showFilters = ['/', '/partners', '/opportunities', '/commissioning'].includes(location.pathname) || isDetailView;
+
     return (
         <div>
             <div className="flex flex-wrap justify-between items-center gap-4">
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">{currentTitle}</h1>
                 <div className="flex items-center gap-2">
                     {location.pathname === '/partners' && (<button onClick={() => openModal('importPartners')} className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Parceiros</span></button>)}
-                    {location.pathname === '/deals' && selectedDealsCount > 0 && (<button onClick={onBulkDeleteDeals} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDealsCount})</span></button>)}
-                    {location.pathname === '/deals' && (<button onClick={() => openModal('importDeals')} className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Oportunidades</span></button>)}
+                    
+                    {/* --- MUDANÇA 4: Botão de excluir aparece quando itens são selecionados --- */}
+                    {location.pathname === '/opportunities' && selectedDealsCount > 0 && (<button onClick={onBulkDeleteDeals} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedDealsCount})</span></button>)}
+                    
+                    {/* --- MUDANÇA 2: Botão de importar oportunidades --- */}
+                    {location.pathname === '/opportunities' && (<button onClick={() => openModal('importDeals')} className="flex items-center bg-white text-sky-500 border border-sky-500 px-4 py-2 rounded-lg shadow-sm hover:bg-sky-50"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Oportunidades</span></button>)}
+                    
                     {location.pathname === '/commissioning' && selectedPaymentsCount > 0 && (<button onClick={onBulkDeletePayments} className="flex items-center bg-red-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-red-700"><Trash2 className="h-5 w-5 mr-2" /><span className="font-semibold">Excluir ({selectedPaymentsCount})</span></button>)}
                     {location.pathname === '/commissioning' && (<button onClick={() => openModal('importPayments')} className="flex items-center bg-green-500 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-green-600"><Upload className="h-5 w-5 mr-2" /><span className="font-semibold">Importar Pagamentos</span></button>)}
+                    
+                    {/* Botão principal de Ação (Adicionar/Registrar) */}
                     {buttonInfo[location.pathname] && (<button onClick={() => buttonInfo[location.pathname].action()} className="flex items-center bg-sky-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-sky-600"><Plus className="h-5 w-5 mr-2" /><span className="font-semibold">{buttonInfo[location.pathname].label}</span></button>)}
                 </div>
             </div>
@@ -539,11 +559,11 @@ const Dashboard = ({ partners, deals }) => {
         return { totalPayments, totalGeneratedRevenue };
     }, [partners]);
     const stats = [ { title: 'Total de Parceiros', value: partners.length, icon: Users, color: 'text-blue-500' }, { title: 'Oportunidades no Período', value: deals.length, icon: Briefcase, color: 'text-orange-500' }, { title: 'Receita Gerada (Ganhos)', value: formatCurrency(totalGeneratedRevenue), icon: Target, color: 'text-indigo-500' }, { title: 'Pagamentos Recebidos', value: formatCurrency(totalPayments), icon: DollarSign, color: 'text-green-500' }, ];
-    return ( 
+    return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">{stats.map(stat => (<div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center"><div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}><stat.icon className={`h-8 w-8 ${stat.color}`} /></div><div className="ml-4"><p className="text-gray-500">{stat.title}</p><p className="text-2xl font-bold text-slate-800">{stat.value}</p></div></div>))}</div>
             <div><h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2><div className="bg-white p-4 rounded-xl shadow-md"><DealList deals={deals.slice(0, 5)} partners={partners} isMini={true} selectedDeals={[]} setSelectedDeals={() => {}}/></div></div>
-        </div> 
+        </div>
     );
 };
 
@@ -565,7 +585,7 @@ const usePagination = (data, itemsPerPage = 10) => {
         if (!Array.isArray(data)) return [];
         return data.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
     }, [data, currentPage, itemsPerPage]);
-    
+
     useEffect(() => {
       if (currentPage > totalPages && totalPages > 0) {
         setCurrentPage(totalPages);
@@ -577,14 +597,14 @@ const usePagination = (data, itemsPerPage = 10) => {
     }, [data.length, totalPages, currentPage]);
 
     const PaginatorComponent = () => <Paginator currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />;
-    
+
     return [paginatedData, PaginatorComponent, currentPage, setCurrentPage];
 };
 
 const PartnerList = ({ partners, onEdit, onDelete }) => {
     const navigate = useNavigate();
     const [paginatedPartners, PaginatorComponent] = usePagination(partners);
-    
+
     return (
     <div className="bg-white rounded-xl shadow-md overflow-hidden">
         <div className="overflow-x-auto">
@@ -634,15 +654,16 @@ const PartnerDetail = ({ allPartners }) => {
     );
 };
 
+// --- MUDANÇA 4: Funcionalidade de seleção/exclusão já estava implementada aqui
 const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelectedDeals, isMini = false }) => {
     const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
-    
+
     const [paginatedDeals, PaginatorComponent, currentPage, setCurrentPage] = usePagination(deals);
 
     useEffect(() => {
         setSelectedDeals([]);
     }, [currentPage, deals.length, setSelectedDeals]);
-    
+
     const handleSelectAll = (e) => setSelectedDeals(e.target.checked ? paginatedDeals.map(d => d.id) : []);
     const handleSelectOne = (e, id) => setSelectedDeals(e.target.checked ? [...selectedDeals, id] : selectedDeals.filter(dealId => dealId !== id));
 
@@ -689,11 +710,11 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
 
 const CommissioningList = ({ payments, partners, openModal, selectedPayments, setSelectedPayments }) => {
     const [paginatedPayments, PaginatorComponent, currentPage, setCurrentPage] = usePagination(payments);
-    
+
     useEffect(() => {
         setSelectedPayments([]);
     }, [currentPage, payments.length, setSelectedPayments]);
-    
+
     const handleSelectAll = (e) => setSelectedPayments(e.target.checked ? paginatedPayments.map(p => p.id) : []);
     const handleSelectOne = (e, id) => setSelectedPayments(e.target.checked ? [...selectedPayments, id] : selectedPayments.filter(pId => pId !== id));
 
@@ -743,14 +764,14 @@ const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, p
             default: return null;
         }
     };
-    const titles = { 
-        partner: isEditMode ? 'Editar Parceiro' : 'Adicionar Parceiro', 
-        deal: isEditMode ? 'Editar Oportunidade' : 'Registrar Oportunidade', 
-        resource: isEditMode ? 'Editar Recurso' : 'Adicionar Recurso', 
-        nurturing: isEditMode ? 'Editar Conteúdo' : 'Adicionar Conteúdo', 
-        importPayments: 'Importar Planilha de Pagamentos', 
-        importPartners: 'Importar Planilha de Parceiros', 
-        importDeals: 'Importar Planilha de Oportunidades' 
+    const titles = {
+        partner: isEditMode ? 'Editar Parceiro' : 'Adicionar Parceiro',
+        deal: isEditMode ? 'Editar Oportunidade' : 'Registrar Oportunidade',
+        resource: isEditMode ? 'Editar Recurso' : 'Adicionar Recurso',
+        nurturing: isEditMode ? 'Editar Conteúdo' : 'Adicionar Conteúdo',
+        importPayments: 'Importar Planilha de Pagamentos',
+        importPartners: 'Importar Planilha de Parceiros',
+        importDeals: 'Importar Planilha de Oportunidades'
     };
     return (<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-lg"><div className="flex justify-between items-center p-4 border-b"><h2 className="text-xl font-bold text-slate-800">{titles[modalType]}</h2><button onClick={closeModal} className="text-gray-400 hover:text-gray-600"><X className="h-6 w-6" /></button></div><div className="p-6">{renderForm()}</div></div></div>);
 };
@@ -813,23 +834,23 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
             const { successfulImports, failedImports } = await onSubmit(file, collectionName, selectedPartnerId);
             setImportStatus(`${successfulImports} itens importados com sucesso. ${failedImports > 0 ? `${failedImports} linhas ignoradas.` : ''}`);
             setTimeout(() => closeModal(), 3000);
-        } catch (error) { setImportStatus('Ocorreu um erro durante a importação.'); console.error(error); } 
+        } catch (error) { setImportStatus('Ocorreu um erro durante a importação.'); console.error(error); }
         finally { setIsImporting(false); }
     };
-    
+
     const requiresPartnerSelection = collectionName === 'deals';
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-md">{instructions[collectionName]}</p>
-            
+
             {requiresPartnerSelection && partners?.length > 0 && (
                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Associar a qual parceiro?</label>
-                     <select 
-                        value={selectedPartnerId} 
-                        onChange={(e) => setSelectedPartnerId(e.target.value)} 
-                        required 
+                     <select
+                        value={selectedPartnerId}
+                        onChange={(e) => setSelectedPartnerId(e.target.value)}
+                        required
                         className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                     >
                         <option value="">Selecione um parceiro</option>
@@ -847,52 +868,3 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
         </form>
     );
 };
-
-// --- Componente de Aplicação Principal (Wrapper) ---
-const App = () => {
-    const [authInstance, setAuthInstance] = useState(null);
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js';
-        script.async = true;
-        document.head.appendChild(script);
-
-        try {
-            if (Object.values(firebaseConfig).every(v => v)) {
-                const app = initializeApp(firebaseConfig);
-                const auth = getAuth(app);
-                setAuthInstance(auth);
-                const unsubscribe = onAuthStateChanged(auth, (user) => {
-                    setUser(user);
-                    setLoading(false);
-                });
-                return () => {
-                    unsubscribe();
-                    if (document.head.contains(script)) {
-                        document.head.removeChild(script);
-                    }
-                };
-            } else {
-                console.error("Firebase config is missing!");
-                setLoading(false);
-            }
-        } catch (error) {
-            console.error("Erro na inicialização do Firebase:", error);
-            setLoading(false);
-        }
-    }, []);
-
-    if (loading) {
-        return <div className="flex items-center justify-center h-screen bg-gray-100"><div className="text-xl font-semibold text-gray-700">A carregar...</div></div>;
-    }
-    
-    if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-        return <div className="flex items-center justify-center h-screen bg-red-50 text-red-800 p-8"><div className="text-center"><h2 className="text-2xl font-bold mb-4">Erro de Configuração</h2><p>As chaves do Firebase não foram encontradas. Verifique as variáveis de ambiente.</p></div></div>;
-    }
-
-    return user ? <PrmApp auth={authInstance} /> : <LoginPage auth={authInstance} />;
-}
-
