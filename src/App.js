@@ -847,4 +847,26 @@ const ImportForm = ({ collectionName, onSubmit, closeModal, partners }) => {
         </form>
     );
 };
+}
+
+{
+type: uploaded file
+fileName: vitorbaladelli/prm-driva/PRM-Driva-134d08a386428bdab74f2538c0c06a18199d13aa/src/index.js
+fullText:
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './index.css';
+import App from './App';
+import { BrowserRouter } from 'react-router-dom';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </React.StrictMode>
+);
+
+}
 
