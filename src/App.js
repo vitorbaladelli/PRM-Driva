@@ -27,13 +27,14 @@ import {
 } from 'firebase/firestore';
 import {
     Users, Briefcase, DollarSign, Book, Plus, X, LayoutDashboard, Gem, Trophy, Star,
-    Upload, Filter, XCircle, MoreVertical, Edit, Trash2, AlertTriangle,
+    Upload, MoreVertical, Edit, Trash2, AlertTriangle,
     BadgePercent, ArrowLeft, User, TrendingUp, Target, LogOut, Handshake, Lightbulb,
     ChevronLeft, ChevronRight, Activity as ActivityIcon, Calendar, Tag
 } from 'lucide-react';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
-import Dashboard from './components/pages/Dashboard'; // <<< NOVO: Importa o Dashboard
+import Dashboard from './components/pages/Dashboard';
+import DealList from './components/deals/DealList'; // <<< NOVO: Importa o DealList
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
@@ -399,7 +400,6 @@ function PrmApp({ auth }) {
                                 partners={partnersWithDetails}
                                 deals={filteredDeals}
                                 activities={activities}
-                                DealList={DealList} // Passando como prop temporariamente
                             />}
                         />
                         <Route path="/partners" element={
@@ -426,6 +426,7 @@ function PrmApp({ auth }) {
                                 onDelete={handleDelete}
                                 selectedDeals={selectedDeals}
                                 setSelectedDeals={setSelectedDeals}
+                                ActionsMenu={ActionsMenu} // Passando como prop
                             />}
                         />
                         <Route path="/commissioning" element={
@@ -503,7 +504,6 @@ export default function AppWrapper() {
 }
 
 // --- Componentes de UI ---
-// <<< CÓDIGO DO DASHBOARD E RECENTACTIVITIES REMOVIDO DAQUI
 
 const Paginator = ({ currentPage, totalPages, onPageChange }) => {
     if (totalPages <= 1) return null;
@@ -632,58 +632,7 @@ const PartnerDetail = ({ allPartners, allActivities, onAddActivity, onDeleteActi
     );
 };
 
-const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelectedDeals, isMini = false }) => {
-    const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
-
-    const [paginatedDeals, PaginatorComponent, currentPage, setCurrentPage] = usePagination(deals);
-
-    useEffect(() => {
-        setSelectedDeals([]);
-    }, [currentPage, deals.length, setSelectedDeals]);
-
-    const handleSelectAll = (e) => setSelectedDeals(e.target.checked ? paginatedDeals.map(d => d.id) : []);
-    const handleSelectOne = (e, id) => setSelectedDeals(e.target.checked ? [...selectedDeals, id] : selectedDeals.filter(dealId => dealId !== id));
-
-    const partnerNameMap = useMemo(() => {
-        if (!partners) return {};
-        const map = {};
-        partners.forEach(p => { map[p.id] = p.name; });
-        return map;
-    }, [partners]);
-
-    return (
-        <div className={!isMini ? "bg-white rounded-xl shadow-md" : ""}>
-            <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                    <thead className={!isMini ? "bg-slate-50 border-b border-slate-200" : ""}>
-                        <tr>
-                            {!isMini && <th className="p-4"><input type="checkbox" onChange={handleSelectAll} checked={paginatedDeals.length > 0 && selectedDeals.length === paginatedDeals.length} className="rounded" /></th>}
-                            {!isMini && <th className="p-4 font-semibold text-slate-600">Data</th>}
-                            <th className="p-4 font-semibold text-slate-600">Cliente Final</th>
-                            <th className="p-4 font-semibold text-slate-600">Parceiro</th>
-                            <th className="p-4 font-semibold text-slate-600">Valor</th>
-                            <th className="p-4 font-semibold text-slate-600">Status</th>
-                            {!isMini && <th className="p-4 font-semibold text-slate-600">Ações</th>}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {paginatedDeals.map(d => (<tr key={d.id} className={`border-b border-slate-100 ${selectedDeals.includes(d.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
-                            {!isMini && <td className="p-4"><input type="checkbox" checked={selectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
-                            {!isMini && <td className="p-4 text-slate-600">{d.submissionDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td>}
-                            <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
-                            <td className="p-4 text-slate-600">{partnerNameMap[d.partnerId] || d.partnerName || 'Desconhecido'}</td>
-                            <td className="p-4 text-slate-600">{formatCurrency(parseBrazilianCurrency(d.value))}</td>
-                            <td className="p-4"><span className={`px-2 py-1 rounded-full text-sm font-semibold ${statusColors[d.status] || 'bg-gray-100'}`}>{d.status}</span></td>
-                            {!isMini && <td className="p-4 relative"><ActionsMenu onEdit={() => onEdit('deal', d)} onDelete={() => onDelete('deals', d.id)} /></td>}
-                        </tr>))}
-                    </tbody>
-                </table>
-            </div>
-            {deals.length === 0 && <p className="p-4 text-center text-gray-500">Nenhuma oportunidade encontrada.</p>}
-            {!isMini && <PaginatorComponent />}
-        </div>
-    );
-};
+// <<< CÓDIGO DO DEALLIST REMOVIDO DAQUI
 
 const CommissioningList = ({ payments, partners, openModal, selectedPayments, setSelectedPayments }) => {
     const [paginatedPayments, PaginatorComponent, currentPage, setCurrentPage] = usePagination(payments);
