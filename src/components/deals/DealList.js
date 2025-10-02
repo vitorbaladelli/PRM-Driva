@@ -1,10 +1,8 @@
-import React, 'react';
-import { useMemo, useState, useEffect } from 'react';
+import React from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react'; // Adicionado useRef
+import { Edit, Trash2, MoreVertical } from 'lucide-react'; // Adicionado Ícones
 
-// Os componentes ActionsMenu e Paginator, bem como o hook usePagination e as funções de formatação,
-// serão movidos para os seus próprios ficheiros de utilitários nos próximos passos da refatoração.
-// Por agora, vamos duplicá-los aqui para manter o componente funcional.
-
+// As funções de formatação serão movidas para um ficheiro de utilitários mais tarde.
 const formatCurrency = (value) => {
     const numberValue = Number(value);
     if (isNaN(numberValue)) return 'R$ 0,00';
@@ -18,18 +16,17 @@ const parseBrazilianCurrency = (value) => {
     return parseFloat(numberString) || 0;
 };
 
+// Componentes genéricos que serão refatorados depois
 const Paginator = ({ currentPage, totalPages, onPageChange }) => {
     if (totalPages <= 1) return null;
     return (
         <div className="flex justify-center items-center mt-4 p-4">
             <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50">
-                {/* Substituindo ChevronLeft por texto para evitar importação de ícone aqui */}
-                &lt;
+                {'<'} {/* CORREÇÃO AQUI */}
             </button>
             <span className="px-4 text-sm font-medium">Página {currentPage} de {totalPages}</span>
             <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50">
-                {/* Substituindo ChevronRight por texto */}
-                &gt;
+                {'>'} {/* CORREÇÃO AQUI */}
             </button>
         </div>
     );
@@ -58,17 +55,24 @@ const usePagination = (data, itemsPerPage = 10) => {
     return [paginatedData, PaginatorComponent, currentPage, setCurrentPage];
 };
 
+const ActionsMenu = ({ onEdit, onDelete }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const menuRef = useRef(null);
+    useEffect(() => { const handleClickOutside = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setIsOpen(false); }; document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside); }, []);
+    return (<div className="relative" ref={menuRef}><button onClick={() => setIsOpen(!isOpen)} className="p-2 rounded-full hover:bg-gray-200"><MoreVertical size={18} /></button>{isOpen && (<div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 border"><button onClick={(e) => { e.stopPropagation(); onEdit(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"><Edit size={16} className="mr-2" /> Editar</button><button onClick={(e) => { e.stopPropagation(); onDelete(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"><Trash2 size={16} className="mr-2" /> Excluir</button></div>)}</div>);
+};
 
-const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelectedDeals, isMini = false, ActionsMenu }) => {
+
+const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelectedDeals, isMini = false }) => {
     const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
 
-    const [paginatedDeals, PaginatorComponent, currentPage, setCurrentPage] = usePagination(deals);
+    const [paginatedDeals, PaginatorComponent] = usePagination(deals);
 
     useEffect(() => {
         if(setSelectedDeals) {
             setSelectedDeals([]);
         }
-    }, [currentPage, deals.length, setSelectedDeals]);
+    }, [deals.length, setSelectedDeals]); // Removido currentPage para evitar resetar a seleção ao paginar
 
     const handleSelectAll = (e) => setSelectedDeals(e.target.checked ? paginatedDeals.map(d => d.id) : []);
     const handleSelectOne = (e, id) => setSelectedDeals(e.target.checked ? [...selectedDeals, id] : selectedDeals.filter(dealId => dealId !== id));
@@ -96,8 +100,8 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
                         </tr>
                     </thead>
                     <tbody>
-                        {paginatedDeals.map(d => (<tr key={d.id} className={`border-b border-slate-100 ${selectedDeals.includes(d.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
-                            {!isMini && <td className="p-4"><input type="checkbox" checked={selectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
+                        {paginatedDeals.map(d => (<tr key={d.id} className={`border-b border-slate-100 ${selectedDeals && selectedDeals.includes(d.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
+                            {!isMini && <td className="p-4"><input type="checkbox" checked={selectedDeals && selectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
                             {!isMini && <td className="p-4 text-slate-600">{d.submissionDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td>}
                             <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
                             <td className="p-4 text-slate-600">{partnerNameMap[d.partnerId] || d.partnerName || 'Desconhecido'}</td>
