@@ -31,6 +31,7 @@ import {
     BadgePercent, ArrowLeft, User, TrendingUp, Target, LogOut, Handshake, Lightbulb,
     ChevronLeft, ChevronRight, Activity as ActivityIcon, Calendar, Tag, FileText
 } from 'lucide-react';
+import Sidebar from './components/layout/Sidebar'; // <<< NOVO: Importa a Sidebar
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
@@ -157,7 +158,7 @@ function PrmApp({ auth }) {
     const [payments, setPayments] = useState([]);
     const [resources, setResources] = useState([]);
     const [nurturingContent, setNurturingContent] = useState([]);
-    const [activities, setActivities] = useState([]); // <<< NOVO: State para atividades
+    const [activities, setActivities] = useState([]);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalType, setModalType] = useState('');
     const [itemToEdit, setItemToEdit] = useState(null);
@@ -183,7 +184,7 @@ function PrmApp({ auth }) {
             resources: { setter: setResources },
             nurturing: { setter: setNurturingContent },
             payments: { setter: setPayments },
-            activities: { setter: setActivities }, // <<< NOVO: Carregar atividades
+            activities: { setter: setActivities },
         };
         const unsubscribers = Object.entries(collectionsConfig).map(([col, config]) => {
             const collectionPath = `artifacts/${appId}/public/data/${col}`;
@@ -395,7 +396,7 @@ function PrmApp({ auth }) {
                             <Dashboard
                                 partners={partnersWithDetails}
                                 deals={filteredDeals}
-                                activities={activities} // <<< NOVO: Passar atividades
+                                activities={activities}
                             />}
                         />
                         <Route path="/partners" element={
@@ -408,7 +409,7 @@ function PrmApp({ auth }) {
                         <Route path="/partners/:partnerId" element={
                             <PartnerDetail
                                 allPartners={partnersWithDetails}
-                                allActivities={activities} // <<< NOVO: Passar atividades
+                                allActivities={activities}
                                 onAddActivity={openModal}
                                 onDeleteActivity={handleDelete}
                                 onEditActivity={openModal}
@@ -499,12 +500,7 @@ export default function AppWrapper() {
 }
 
 // --- Componentes de UI ---
-const Sidebar = ({ auth }) => {
-    const location = useLocation();
-    const handleLogout = () => signOut(auth);
-    const navItems = [ { path: '/', label: 'Dashboard', icon: LayoutDashboard }, { path: '/partners', label: 'Parceiros', icon: Users }, { path: '/opportunities', label: 'Oportunidades', icon: Briefcase }, { path: '/commissioning', label: 'Comissionamento', icon: BadgePercent }, { path: '/resources', label: 'Recursos', icon: Book }, { path: '/nurturing', label: 'Nutrição', icon: Lightbulb }, ];
-    return ( <aside className="w-16 sm:w-64 bg-slate-800 text-white flex flex-col"><div className="h-16 flex items-center justify-center sm:justify-start sm:px-6 border-b border-slate-700"><img src="/logo-driva-negativa.png" alt="Logo Driva" className="h-8 hidden sm:block" /><Handshake className="h-8 w-8 text-white sm:hidden" /></div><nav className="flex-1 mt-6"><ul>{navItems.map(item => (<li key={item.path} className="px-3 sm:px-6 py-1"><Link to={item.path} className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname === item.path || (location.pathname.startsWith(item.path) && item.path !== '/') ? 'bg-sky-500 text-white' : 'hover:bg-slate-700'}`}><item.icon className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">{item.label}</span></Link></li>))}</ul></nav><div className="p-4 border-t border-slate-700"><button onClick={handleLogout} className="w-full flex items-center p-2 rounded-md text-slate-300 hover:bg-slate-700 hover:text-white"><LogOut className="h-5 w-5" /><span className="hidden sm:inline ml-4 font-medium">Sair</span></button></div></aside> );
-};
+// <<< CÓDIGO DA SIDEBAR REMOVIDO DAQUI
 
 const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selectedDealsCount, onBulkDeleteDeals, selectedPaymentsCount, onBulkDeletePayments }) => {
     const location = useLocation();
@@ -552,7 +548,6 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
     );
 };
 
-// <<< NOVO: Componente para exibir atividades recentes no Dashboard
 const RecentActivities = ({ activities, partners }) => {
     const partnerNameMap = useMemo(() => {
         const map = {};
@@ -673,7 +668,6 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
     </div>
 )};
 
-// <<< NOVO: Componente para listar as atividades de um parceiro
 const ActivityList = ({ activities, onEdit, onDelete }) => {
     return (
         <div className="space-y-4">
@@ -727,7 +721,6 @@ const PartnerDetail = ({ allPartners, allActivities, onAddActivity, onDeleteActi
                     </div>
                 </div>
             </div>
-            {/* <<< NOVO: Seção de Atividades no Perfil do Parceiro */}
             <div className="mt-6 bg-white p-6 rounded-xl shadow-md">
                  <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xl font-bold text-slate-700 flex items-center"><ActivityIcon size={20} className="mr-2 text-sky-500" />Atividades</h3>
@@ -842,7 +835,7 @@ const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, p
             case 'deal': return <DealForm onSubmit={isEditMode ? handleUpdate : handleAdd} partners={partners} initialData={initialData} />;
             case 'resource': return <ResourceForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'nurturing': return <NurturingForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
-            case 'activity': return <ActivityForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />; // <<< NOVO: formulário de atividade
+            case 'activity': return <ActivityForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
             case 'importPayments': return <ImportForm collectionName="payments" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importPartners': return <ImportForm collectionName="partners" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importDeals': return <ImportForm collectionName="deals" partners={partners} onSubmit={handleImport} closeModal={closeModal} />;
@@ -854,7 +847,7 @@ const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, p
         deal: isEditMode ? 'Editar Oportunidade' : 'Registrar Oportunidade',
         resource: isEditMode ? 'Editar Recurso' : 'Adicionar Recurso',
         nurturing: isEditMode ? 'Editar Conteúdo' : 'Adicionar Conteúdo',
-        activity: isEditMode ? 'Editar Atividade' : 'Adicionar Atividade', // <<< NOVO: título do modal de atividade
+        activity: isEditMode ? 'Editar Atividade' : 'Adicionar Atividade',
         importPayments: 'Importar Planilha de Pagamentos',
         importPartners: 'Importar Planilha de Parceiros',
         importDeals: 'Importar Planilha de Oportunidades'
@@ -896,7 +889,6 @@ const NurturingForm = ({ onSubmit, initialData }) => {
     return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="title" name="title" label="Título do Conteúdo" value={formData.title} onChange={handleChange} required /><FormTextarea id="content" name="content" label="Conteúdo/Direcionamento" value={formData.content} onChange={handleChange} required /><FormButton>{initialData?.id ? 'Salvar Alterações' : 'Publicar Conteúdo'}</FormButton></form>);
 };
 
-// <<< NOVO: Formulário para adicionar e editar atividades
 const ActivityForm = ({ onSubmit, initialData }) => {
     const [formData, setFormData] = useState({
         title: initialData?.title || '',
