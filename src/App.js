@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
 import { initializeApp } from 'firebase/app';
 import {
     getAuth,
@@ -28,14 +28,16 @@ import {
 import {
     Users, Briefcase, DollarSign, Book, Plus, X, LayoutDashboard, Gem, Trophy, Star,
     Upload, MoreVertical, Edit, Trash2, AlertTriangle,
-    BadgePercent, ArrowLeft, User, TrendingUp, Target, LogOut, Handshake, Lightbulb,
+    BadgePercent, LogOut, Handshake, Lightbulb,
     ChevronLeft, ChevronRight, Activity as ActivityIcon, Calendar, Tag
 } from 'lucide-react';
+
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
 import Dashboard from './components/pages/Dashboard';
 import DealList from './components/deals/DealList';
-import PartnerList from './components/partners/PartnerList'; // <<< NOVO: Importa o PartnerList
+import PartnerList from './components/partners/PartnerList';
+import PartnerDetail from './components/partners/PartnerDetail'; // <<< NOVO: Importa o PartnerDetail
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
@@ -50,12 +52,6 @@ const appId = process.env.REACT_APP_FIREBASE_PROJECT_ID || 'prm-driva-default';
 
 
 // --- Funções Utilitárias ---
-const formatCurrency = (value) => {
-    const numberValue = Number(value);
-    if (isNaN(numberValue)) return 'R$ 0,00';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numberValue);
-};
-
 const parseBrazilianCurrency = (value) => {
     if (typeof value === 'number') return value;
     if (typeof value !== 'string') return 0;
@@ -239,6 +235,9 @@ function PrmApp({ auth }) {
             const conversionRate = partnerDeals.length > 0 ? (wonDealsCount / partnerDeals.length) * 100 : 0;
             const type = partner.type || 'Finder';
             const tierDetails = getPartnerTierDetails(paymentsReceived, type);
+            // Injetar o ícone diretamente para que o PartnerList possa usá-lo
+            tierDetails.icon = TIER_CONFIG[tierDetails.name.toUpperCase()]?.icon || Users;
+
             const commissionToPay = paymentsReceived * (tierDetails.commissionRate / 100);
 
             return { ...partner, paymentsReceived, tier: tierDetails, totalOpportunitiesValue, conversionRate, commissionToPay, generatedRevenue };
@@ -539,71 +538,7 @@ const usePagination = (data, itemsPerPage = 10) => {
     return [paginatedData, PaginatorComponent, currentPage, setCurrentPage];
 };
 
-// <<< CÓDIGO DO PARTNERLIST REMOVIDO DAQUI
-
-const ActivityList = ({ activities, onEdit, onDelete }) => {
-    return (
-        <div className="space-y-4">
-            {activities.length === 0 ? (
-                <p className="py-4 text-center text-gray-500">Nenhuma atividade registrada para este parceiro.</p>
-            ) : (
-                activities.map(activity => (
-                    <div key={activity.id} className="bg-slate-50 p-4 rounded-lg relative">
-                         <div className="absolute top-2 right-2">
-                            <ActionsMenu onEdit={() => onEdit('activity', activity)} onDelete={() => onDelete('activities', activity.id)} />
-                        </div>
-                        <div className="flex items-center mb-2">
-                             <h4 className="text-md font-bold text-slate-800 pr-8">{activity.title}</h4>
-                        </div>
-                        <div className="flex items-center text-sm text-gray-500 space-x-4 mb-2">
-                            <span className="flex items-center"><Tag size={14} className="mr-1" />{activity.category}</span>
-                            <span className="flex items-center"><Calendar size={14} className="mr-1" />{activity.createdAt?.toDate().toLocaleDateString('pt-BR')}</span>
-                        </div>
-                        <p className="text-slate-600 whitespace-pre-wrap">{activity.description}</p>
-                    </div>
-                ))
-            )}
-        </div>
-    );
-};
-
-
-const PartnerDetail = ({ allPartners, allActivities, onAddActivity, onDeleteActivity, onEditActivity }) => {
-    const { partnerId } = useParams();
-    const partner = allPartners.find(p => p.id === partnerId);
-    
-    const partnerActivities = useMemo(() => {
-        return allActivities.filter(a => a.partnerId === partnerId);
-    }, [allActivities, partnerId]);
-
-    if (!partner) return <div className="text-center text-gray-500">Parceiro não encontrado.</div>;
-
-    return (
-        <div>
-            <Link to="/partners" className="flex items-center text-sky-600 hover:underline mb-6 font-semibold"><ArrowLeft size={18} className="mr-2" />Voltar para a lista de parceiros</Link>
-            <div className="bg-white p-6 rounded-xl shadow-md mb-6"><div className="flex items-center"><div className={`p-3 rounded-full ${partner.tier.bgColor}`}><partner.tier.icon className={`h-10 w-10 ${partner.tier.color}`} /></div><div className="ml-4"><h2 className="text-3xl font-bold text-slate-800">{partner.name}</h2><p className="text-gray-500">{partner.type}</p></div></div></div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-1 bg-white p-6 rounded-xl shadow-md"><h3 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><User size={20} className="mr-2 text-sky-500" />Informações de Contato</h3><div className="space-y-2"><p className="text-gray-700"><strong>Nome:</strong> {partner.contactName}</p><p className="text-gray-700"><strong>Email:</strong> {partner.contactEmail}</p></div></div>
-                <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-md"><h3 className="text-xl font-bold text-slate-700 mb-4 flex items-center"><TrendingUp size={20} className="mr-2 text-sky-500" />Métricas (no período)</h3>
-                    <div className="grid grid-cols-2 gap-y-4 gap-x-2">
-                        <div><p className="text-sm text-gray-500">Pagamentos Recebidos</p><p className="text-2xl font-bold text-green-600">{formatCurrency(partner.paymentsReceived)}</p></div>
-                        <div><p className="text-sm text-gray-500">Comissão a Pagar</p><p className="text-2xl font-bold text-green-600">{formatCurrency(partner.commissionToPay)}</p></div>
-                        <div><p className="text-sm text-gray-500">Receita Gerada (Ganhos)</p><p className="text-2xl font-bold text-slate-800">{formatCurrency(partner.generatedRevenue)}</p></div>
-                        <div><p className="text-sm text-gray-500">Oportunidades Geradas</p><p className="text-2xl font-bold text-slate-800">{formatCurrency(partner.totalOpportunitiesValue)}</p></div>
-                        <div><p className="text-sm text-gray-500">Taxa de Conversão</p><p className="text-2xl font-bold text-slate-800">{partner.conversionRate.toFixed(1)}%</p></div>
-                    </div>
-                </div>
-            </div>
-            <div className="mt-6 bg-white p-6 rounded-xl shadow-md">
-                 <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-slate-700 flex items-center"><ActivityIcon size={20} className="mr-2 text-sky-500" />Atividades</h3>
-                    <button onClick={() => onAddActivity('activity', { partnerId: partner.id, partnerName: partner.name })} className="flex items-center bg-sky-500 text-white px-4 py-2 rounded-lg shadow-md hover:bg-sky-600"><Plus className="h-5 w-5 mr-2" /><span className="font-semibold">Adicionar Atividade</span></button>
-                </div>
-                <ActivityList activities={partnerActivities} onEdit={onEditActivity} onDelete={onDeleteActivity} />
-            </div>
-        </div>
-    );
-};
+// <<< CÓDIGO DO PARTNERDETAIL REMOVIDO DAQUI
 
 const CommissioningList = ({ payments, partners, openModal, selectedPayments, setSelectedPayments }) => {
     const [paginatedPayments, PaginatorComponent, currentPage, setCurrentPage] = usePagination(payments);
