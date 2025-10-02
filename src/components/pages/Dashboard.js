@@ -1,9 +1,6 @@
 import React, { useMemo } from 'react';
 import { Users, Briefcase, DollarSign, Target, Activity as ActivityIcon } from 'lucide-react';
-
-// Nota: O componente DealList será importado aqui no próximo passo da refatoração.
-// Por enquanto, esta estrutura assume que ele estará disponível para o Dashboard.
-// import DealList from '../deals/DealList'; 
+import DealList from '../deals/DealList'; // <<< NOVO: Importa o DealList
 
 // A função formatCurrency será movida para um ficheiro de utilitários mais tarde.
 const formatCurrency = (value) => {
@@ -50,7 +47,7 @@ const RecentActivities = ({ activities, partners }) => {
     );
 };
 
-const Dashboard = ({ partners, deals, activities, DealList }) => { // Note que DealList é recebido como prop temporariamente
+const Dashboard = ({ partners, deals, activities }) => { // <<< ALTERAÇÃO: Não recebe mais DealList como prop
     const { totalPayments, totalGeneratedRevenue } = useMemo(() => {
         const totalPayments = partners.reduce((sum, p) => sum + p.paymentsReceived, 0);
         const totalGeneratedRevenue = partners.reduce((sum, p) => sum + p.generatedRevenue, 0);
@@ -86,7 +83,8 @@ const Dashboard = ({ partners, deals, activities, DealList }) => { // Note que D
                         <DealList 
                             deals={deals.slice(0, 5)} 
                             partners={partners} 
-                            isMini={true} 
+                            isMini={true}
+                            // Estas props não são necessárias na versão mini, mas mantemos para consistência
                             selectedDeals={[]} 
                             setSelectedDeals={() => {}}
                         />
