@@ -4,13 +4,7 @@ import {
     ArrowLeft, User, TrendingUp, Plus, Activity as ActivityIcon,
     Calendar, Tag, MoreVertical, Edit, Trash2
 } from 'lucide-react';
-
-// Funções e componentes que serão movidos para ficheiros de utilitários mais tarde
-const formatCurrency = (value) => {
-    const numberValue = Number(value);
-    if (isNaN(numberValue)) return 'R$ 0,00';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numberValue);
-};
+import { formatCurrency } from '../../utils/formatter';
 
 const ActionsMenu = ({ onEdit, onDelete }) => {
     const [isOpen, setIsOpen] = useState(false);
