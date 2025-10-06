@@ -1,13 +1,7 @@
 import React, { useMemo } from 'react';
 import { Users, Briefcase, DollarSign, Target, Activity as ActivityIcon } from 'lucide-react';
 import DealList from '../deals/DealList'; // <<< NOVO: Importa o DealList
-
-// A função formatCurrency será movida para um ficheiro de utilitários mais tarde.
-const formatCurrency = (value) => {
-    const numberValue = Number(value);
-    if (isNaN(numberValue)) return 'R$ 0,00';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numberValue);
-};
+import { formatCurrency } from '../../utils/formatter';
 
 const RecentActivities = ({ activities, partners }) => {
     const partnerNameMap = useMemo(() => {
