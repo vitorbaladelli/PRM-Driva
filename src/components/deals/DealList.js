@@ -1,54 +1,7 @@
-import React from 'react';
-import { useMemo, useState, useEffect, useRef } from 'react'; // Adicionado useRef
-import { Edit, Trash2, MoreVertical } from 'lucide-react'; // Adicionado Ícones
+import React, { useMemo, useEffect } from 'react';
 import { formatCurrency, parseBrazilianCurrency } from '../../utils/formatter';
-
-// Componentes genéricos que serão refatorados depois
-const Paginator = ({ currentPage, totalPages, onPageChange }) => {
-    if (totalPages <= 1) return null;
-    return (
-        <div className="flex justify-center items-center mt-4 p-4">
-            <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50">
-                {'<'} {/* CORREÇÃO AQUI */}
-            </button>
-            <span className="px-4 text-sm font-medium">Página {currentPage} de {totalPages}</span>
-            <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50">
-                {'>'} {/* CORREÇÃO AQUI */}
-            </button>
-        </div>
-    );
-};
-
-const usePagination = (data, itemsPerPage = 10) => {
-    const [currentPage, setCurrentPage] = useState(1);
-    const totalPages = Math.ceil(data.length / itemsPerPage);
-    const paginatedData = useMemo(() => {
-        if (!Array.isArray(data)) return [];
-        return data.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-    }, [data, currentPage, itemsPerPage]);
-
-    useEffect(() => {
-      if (currentPage > totalPages && totalPages > 0) {
-        setCurrentPage(totalPages);
-      } else if (currentPage < 1 && totalPages > 0) {
-        setCurrentPage(1);
-      } else if (data.length > 0 && totalPages > 0 && currentPage === 0) {
-        setCurrentPage(1);
-      }
-    }, [data.length, totalPages, currentPage]);
-
-    const PaginatorComponent = () => <Paginator currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />;
-
-    return [paginatedData, PaginatorComponent, currentPage, setCurrentPage];
-};
-
-const ActionsMenu = ({ onEdit, onDelete }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const menuRef = useRef(null);
-    useEffect(() => { const handleClickOutside = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setIsOpen(false); }; document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside); }, []);
-    return (<div className="relative" ref={menuRef}><button onClick={() => setIsOpen(!isOpen)} className="p-2 rounded-full hover:bg-gray-200"><MoreVertical size={18} /></button>{isOpen && (<div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 border"><button onClick={(e) => { e.stopPropagation(); onEdit(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"><Edit size={16} className="mr-2" /> Editar</button><button onClick={(e) => { e.stopPropagation(); onDelete(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"><Trash2 size={16} className="mr-2" /> Excluir</button></div>)}</div>);
-};
-
+import usePagination from '../../hooks/usePagination';
+import ActionsMenu from '../common/ActionsMenu';
 
 const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelectedDeals, isMini = false }) => {
     const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
