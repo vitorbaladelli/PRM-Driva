@@ -1,20 +1,7 @@
 import React from 'react';
 import { useMemo, useState, useEffect, useRef } from 'react'; // Adicionado useRef
 import { Edit, Trash2, MoreVertical } from 'lucide-react'; // Adicionado Ícones
-
-// As funções de formatação serão movidas para um ficheiro de utilitários mais tarde.
-const formatCurrency = (value) => {
-    const numberValue = Number(value);
-    if (isNaN(numberValue)) return 'R$ 0,00';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numberValue);
-};
-
-const parseBrazilianCurrency = (value) => {
-    if (typeof value === 'number') return value;
-    if (typeof value !== 'string') return 0;
-    const numberString = value.replace(/\./g, '').replace(',', '.');
-    return parseFloat(numberString) || 0;
-};
+import { formatCurrency, parseBrazilianCurrency } from '../../utils/formatter';
 
 // Componentes genéricos que serão refatorados depois
 const Paginator = ({ currentPage, totalPages, onPageChange }) => {
