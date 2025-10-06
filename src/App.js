@@ -38,7 +38,10 @@ import Dashboard from './components/pages/Dashboard';
 import DealList from './components/deals/DealList';
 import PartnerList from './components/partners/PartnerList';
 import PartnerDetail from './components/partners/PartnerDetail';
-import { formatCurrency, parseBrazilianCurrency } from './utils/formatter'; // <<< NOVO: Importa as funções
+import { formatCurrency, parseBrazilianCurrency } from './utils/formatter';
+import usePagination from './hooks/usePagination';
+import ActionsMenu from './components/common/ActionsMenu';
+
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
@@ -53,8 +56,6 @@ const appId = process.env.REACT_APP_FIREBASE_PROJECT_ID || 'prm-driva-default';
 
 
 // --- Funções Utilitárias ---
-// <<< REMOVIDO: Funções movidas para src/utils/formatter.js
-
 const parseDateString = (dateString) => {
     if (!dateString) return null;
     try {
@@ -499,47 +500,14 @@ export default function AppWrapper() {
 }
 
 // --- Componentes de UI ---
-
-const Paginator = ({ currentPage, totalPages, onPageChange }) => {
-    if (totalPages <= 1) return null;
-    return (
-        <div className="flex justify-center items-center mt-4 p-4">
-            <button onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1} className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50"><ChevronLeft size={20} /></button>
-            <span className="px-4 text-sm font-medium">Página {currentPage} de {totalPages}</span>
-            <button onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages} className="p-2 rounded-md hover:bg-gray-100 disabled:opacity-50"><ChevronRight size={20} /></button>
-        </div>
-    );
-};
-
-const usePagination = (data, itemsPerPage = 10) => {
-    const [currentPage, setCurrentPage] = useState(1);
-    const totalPages = Math.ceil(data.length / itemsPerPage);
-    const paginatedData = useMemo(() => {
-        if (!Array.isArray(data)) return [];
-        return data.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-    }, [data, currentPage, itemsPerPage]);
-
-    useEffect(() => {
-      if (currentPage > totalPages && totalPages > 0) {
-        setCurrentPage(totalPages);
-      } else if (currentPage < 1 && totalPages > 0) {
-        setCurrentPage(1);
-      } else if (data.length > 0 && totalPages > 0 && currentPage === 0) {
-        setCurrentPage(1);
-      }
-    }, [data.length, totalPages, currentPage]);
-
-    const PaginatorComponent = () => <Paginator currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />;
-
-    return [paginatedData, PaginatorComponent, currentPage, setCurrentPage];
-};
-
 const CommissioningList = ({ payments, partners, openModal, selectedPayments, setSelectedPayments }) => {
-    const [paginatedPayments, PaginatorComponent, currentPage, setCurrentPage] = usePagination(payments);
+    const [paginatedPayments, PaginatorComponent] = usePagination(payments);
 
     useEffect(() => {
-        setSelectedPayments([]);
-    }, [currentPage, payments.length, setSelectedPayments]);
+        if (setSelectedPayments) {
+            setSelectedPayments([]);
+        }
+    }, [payments.length, setSelectedPayments]);
 
     const handleSelectAll = (e) => setSelectedPayments(e.target.checked ? paginatedPayments.map(p => p.id) : []);
     const handleSelectOne = (e, id) => setSelectedPayments(e.target.checked ? [...selectedPayments, id] : selectedPayments.filter(pId => pId !== id));
@@ -568,12 +536,6 @@ const ResourceHub = ({ resources, onEdit, onDelete }) => ( <div className="grid 
 const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => ( <div className="space-y-6">{nurturingContent.map(item => (<div key={item.id} className="bg-white p-6 rounded-xl shadow-md relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit('nurturing', item)} onDelete={() => onDelete('nurturing', item.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{item.title}</h3><p className="text-sm text-gray-500 mt-1">{item.createdAt?.toDate().toLocaleDateString('pt-BR') || ''}</p><p className="text-slate-600 mt-4 whitespace-pre-wrap">{item.content}</p></div>))}{nurturingContent.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum conteúdo de nutrição publicado.</p>}</div>);
 
 // --- Componentes Genéricos ---
-const ActionsMenu = ({ onEdit, onDelete }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    const menuRef = useRef(null);
-    useEffect(() => { const handleClickOutside = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setIsOpen(false); }; document.addEventListener('mousedown', handleClickOutside); return () => document.removeEventListener('mousedown', handleClickOutside); }, []);
-    return (<div className="relative" ref={menuRef}><button onClick={() => setIsOpen(!isOpen)} className="p-2 rounded-full hover:bg-gray-200"><MoreVertical size={18} /></button>{isOpen && (<div className="absolute right-0 mt-2 w-40 bg-white rounded-md shadow-lg z-20 border"><button onClick={(e) => { e.stopPropagation(); onEdit(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"><Edit size={16} className="mr-2" /> Editar</button><button onClick={(e) => { e.stopPropagation(); onDelete(); setIsOpen(false); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center"><Trash2 size={16} className="mr-2" /> Excluir</button></div>)}</div>);
-};
 const ConfirmationModal = ({ onConfirm, onCancel, title = "Confirmar Exclusão", message = "Tem a certeza de que deseja excluir este item? Esta ação não pode ser desfeita." }) => (<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center"><div className="mx-auto bg-red-100 rounded-full h-12 w-12 flex items-center justify-center"><AlertTriangle className="h-6 w-6 text-red-600" /></div><h3 className="text-lg font-medium text-gray-900 mt-4">{title}</h3><p className="text-sm text-gray-500 mt-2">{message}</p><div className="mt-6 flex justify-center gap-4"><button onClick={onCancel} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-semibold">Cancelar</button><button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold">Confirmar Exclusão</button></div></div></div>);
 
 const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, partners, initialData }) => {
