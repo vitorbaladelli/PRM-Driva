@@ -1,14 +1,9 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Edit, Trash2, MoreVertical } from 'lucide-react';
+import { formatCurrency } from '../../utils/formatter';
 
-// Funções e componentes que serão movidos para ficheiros de utilitários mais tarde
-const formatCurrency = (value) => {
-    const numberValue = Number(value);
-    if (isNaN(numberValue)) return 'R$ 0,00';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(numberValue);
-};
-
+// Componentes que serão movidos para ficheiros de utilitários mais tarde
 const Paginator = ({ currentPage, totalPages, onPageChange }) => {
     if (totalPages <= 1) return null;
     return (
