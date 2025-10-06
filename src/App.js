@@ -37,7 +37,8 @@ import Header from './components/layout/Header';
 import Dashboard from './components/pages/Dashboard';
 import DealList from './components/deals/DealList';
 import PartnerList from './components/partners/PartnerList';
-import PartnerDetail from './components/partners/PartnerDetail'; // <<< NOVO: Importa o PartnerDetail
+import PartnerDetail from './components/partners/PartnerDetail';
+import { formatCurrency, parseBrazilianCurrency } from './utils/formatter'; // <<< NOVO: Importa as funções
 
 // --- Configuração do Firebase ---
 const firebaseConfig = {
@@ -52,12 +53,7 @@ const appId = process.env.REACT_APP_FIREBASE_PROJECT_ID || 'prm-driva-default';
 
 
 // --- Funções Utilitárias ---
-const parseBrazilianCurrency = (value) => {
-    if (typeof value === 'number') return value;
-    if (typeof value !== 'string') return 0;
-    const numberString = value.replace(/\./g, '').replace(',', '.');
-    return parseFloat(numberString) || 0;
-};
+// <<< REMOVIDO: Funções movidas para src/utils/formatter.js
 
 const parseDateString = (dateString) => {
     if (!dateString) return null;
@@ -537,8 +533,6 @@ const usePagination = (data, itemsPerPage = 10) => {
 
     return [paginatedData, PaginatorComponent, currentPage, setCurrentPage];
 };
-
-// <<< CÓDIGO DO PARTNERDETAIL REMOVIDO DAQUI
 
 const CommissioningList = ({ payments, partners, openModal, selectedPayments, setSelectedPayments }) => {
     const [paginatedPayments, PaginatorComponent, currentPage, setCurrentPage] = usePagination(payments);
