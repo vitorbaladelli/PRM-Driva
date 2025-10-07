@@ -47,7 +47,7 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
                             <td className="p-4 text-slate-600">{partnerNameMap[d.partnerId] || d.partnerName || 'Desconhecido'}</td>
                             <td className="p-4 text-slate-600">{formatCurrency(parseBrazilianCurrency(d.value))}</td>
                             <td className="p-4"><span className={`px-2 py-1 rounded-full text-sm font-semibold ${statusColors[d.status] || 'bg-gray-100'}`}>{d.status}</span></td>
-                            {!isMini && <td className="p-4 relative"><ActionsMenu onEdit={() => onEdit('deal', d)} onDelete={() => onDelete('deals', d.id)} /></td>}
+                            {!isMini && <td className="p-4 relative"><ActionsMenu onEdit={() => onEdit(d)} onDelete={() => onDelete('deals', d.id)} /></td>}
                         </tr>))}
                     </tbody>
                 </table>
