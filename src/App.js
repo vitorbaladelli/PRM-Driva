@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 import { initializeApp } from 'firebase/app';
 import {
     getAuth,
@@ -26,10 +26,7 @@ import {
     getDocs
 } from 'firebase/firestore';
 import {
-    Users, Briefcase, DollarSign, Book, Plus, X, LayoutDashboard, Gem, Trophy, Star,
-    Upload, MoreVertical, Edit, Trash2, AlertTriangle,
-    BadgePercent, LogOut, Handshake, Lightbulb,
-    ChevronLeft, ChevronRight, Activity as ActivityIcon, Calendar, Tag
+    Users, Gem, Trophy, Star, X, AlertTriangle
 } from 'lucide-react';
 
 import Sidebar from './components/layout/Sidebar';
@@ -419,7 +416,7 @@ function PrmApp({ auth }) {
                             <DealList
                                 deals={filteredDeals}
                                 partners={partners}
-                                onEdit={(d) => openModal('deal', d)}
+                                onEdit={(item) => openModal('deal', item)}
                                 onDelete={handleDelete}
                                 selectedDeals={selectedDeals}
                                 setSelectedDeals={setSelectedDeals}
@@ -437,14 +434,14 @@ function PrmApp({ auth }) {
                         <Route path="/resources" element={
                             <ResourceHub
                                 resources={resources}
-                                onEdit={(r) => openModal('resource', r)}
+                                onEdit={(item) => openModal('resource', item)}
                                 onDelete={handleDelete}
                             />}
                         />
                         <Route path="/nurturing" element={
                             <NurturingHub
                                 nurturingContent={nurturingContent}
-                                onEdit={(i) => openModal('nurturing', i)}
+                                onEdit={(item) => openModal('nurturing', item)}
                                 onDelete={handleDelete}
                             />}
                         />
@@ -524,7 +521,7 @@ const CommissioningList = ({ payments, partners, openModal, selectedPayments, se
             <div className="overflow-x-auto">
                 <table className="w-full text-left">
                     <thead className="bg-slate-50 border-b border-slate-200"><tr><th className="p-4"><input type="checkbox" onChange={handleSelectAll} checked={paginatedPayments.length > 0 && selectedPayments.length === paginatedPayments.length} className="rounded" /></th><th className="p-4 font-semibold text-slate-600">Data do Pagamento</th><th className="p-4 font-semibold text-slate-600">Cliente Final</th><th className="p-4 font-semibold text-slate-600">Parceiro</th><th className="p-4 font-semibold text-slate-600">Valor Pago</th></tr></thead>
-                    <tbody>{paginatedPayments.map(p => (<tr key={p.id} className={`border-b border-slate-100 ${selectedPayments.includes(p.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}><td className="p-4"><input type="checkbox" checked={selectedPayments.includes(p.id)} onChange={(e) => handleSelectOne(e, p.id)} className="rounded" /></td><td className="p-4 text-slate-600">{p.paymentDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td><td className="p-4 text-slate-800 font-medium">{p.clientName}</td><td className="p-4 text-slate-600">{partnerNameMap[p.partnerId] || p.partnerName || 'Desconhecido'}</td><td className="p-4 text-slate-600 font-medium">{formatCurrency(parseBrazilianCurrency(p.paymentValue))}</td></tr>))}{payments.length === 0 && <tr><td colSpan="5"><p className="p-4 text-center text-gray-500">Nenhum pagamento encontrado.</p></td></tr>}</tbody>
+                    <tbody>{payments.length > 0 ? paginatedPayments.map(p => (<tr key={p.id} className={`border-b border-slate-100 ${selectedPayments.includes(p.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}><td className="p-4"><input type="checkbox" checked={selectedPayments.includes(p.id)} onChange={(e) => handleSelectOne(e, p.id)} className="rounded" /></td><td className="p-4 text-slate-600">{p.paymentDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td><td className="p-4 text-slate-800 font-medium">{p.clientName}</td><td className="p-4 text-slate-600">{partnerNameMap[p.partnerId] || p.partnerName || 'Desconhecido'}</td><td className="p-4 text-slate-600 font-medium">{formatCurrency(parseBrazilianCurrency(p.paymentValue))}</td></tr>)) : (<tr><td colSpan="5"><p className="p-4 text-center text-gray-500">Nenhum pagamento encontrado.</p></td></tr>)}</tbody>
                 </table>
             </div>
             <PaginatorComponent />
@@ -532,21 +529,40 @@ const CommissioningList = ({ payments, partners, openModal, selectedPayments, se
     );
 };
 
-const ResourceHub = ({ resources, onEdit, onDelete }) => ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{resources.map(r => (<div key={r.id} className="bg-white p-6 rounded-xl shadow-md flex flex-col relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit('resource', r)} onDelete={() => onDelete('resources', r.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{r.title}</h3><p className="text-slate-600 mt-2 flex-grow">{r.description}</p><div className="mt-4 flex justify-between items-center"><span className="text-sm font-semibold bg-sky-100 text-sky-800 px-2 py-1 rounded-full">{r.category}</span><a href={r.url} target="_blank" rel="noopener noreferrer" className="font-bold text-sky-500 hover:text-sky-600">Aceder</a></div></div>))}{resources.length === 0 && <p className="p-4 text-center text-gray-500 col-span-full">Nenhum recurso disponível.</p>}</div>);
-const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => ( <div className="space-y-6">{nurturingContent.map(item => (<div key={item.id} className="bg-white p-6 rounded-xl shadow-md relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit('nurturing', item)} onDelete={() => onDelete('nurturing', item.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{item.title}</h3><p className="text-sm text-gray-500 mt-1">{item.createdAt?.toDate().toLocaleDateString('pt-BR') || ''}</p><p className="text-slate-600 mt-4 whitespace-pre-wrap">{item.content}</p></div>))}{nurturingContent.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum conteúdo de nutrição publicado.</p>}</div>);
+const ResourceHub = ({ resources, onEdit, onDelete }) => ( <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{resources.map(r => (<div key={r.id} className="bg-white p-6 rounded-xl shadow-md flex flex-col relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(r)} onDelete={() => onDelete('resources', r.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{r.title}</h3><p className="text-slate-600 mt-2 flex-grow">{r.description}</p><div className="mt-4 flex justify-between items-center"><span className="text-sm font-semibold bg-sky-100 text-sky-800 px-2 py-1 rounded-full">{r.category}</span><a href={r.url} target="_blank" rel="noopener noreferrer" className="font-bold text-sky-500 hover:text-sky-600">Aceder</a></div></div>))}{resources.length === 0 && <p className="p-4 text-center text-gray-500 col-span-full">Nenhum recurso disponível.</p>}</div>);
+const NurturingHub = ({ nurturingContent, onEdit, onDelete }) => ( <div className="space-y-6">{nurturingContent.map(item => (<div key={item.id} className="bg-white p-6 rounded-xl shadow-md relative"><div className="absolute top-2 right-2"><ActionsMenu onEdit={() => onEdit(item)} onDelete={() => onDelete('nurturing', item.id)} /></div><h3 className="text-lg font-bold text-slate-800 pr-8">{item.title}</h3><p className="text-sm text-gray-500 mt-1">{item.createdAt?.toDate().toLocaleDateString('pt-BR') || ''}</p><p className="text-slate-600 mt-4 whitespace-pre-wrap">{item.content}</p></div>))}{nurturingContent.length === 0 && <p className="p-4 text-center text-gray-500">Nenhum conteúdo de nutrição publicado.</p>}</div>);
 
 // --- Componentes Genéricos ---
 const ConfirmationModal = ({ onConfirm, onCancel, title = "Confirmar Exclusão", message = "Tem a certeza de que deseja excluir este item? Esta ação não pode ser desfeita." }) => (<div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4"><div className="bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 text-center"><div className="mx-auto bg-red-100 rounded-full h-12 w-12 flex items-center justify-center"><AlertTriangle className="h-6 w-6 text-red-600" /></div><h3 className="text-lg font-medium text-gray-900 mt-4">{title}</h3><p className="text-sm text-gray-500 mt-2">{message}</p><div className="mt-6 flex justify-center gap-4"><button onClick={onCancel} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-semibold">Cancelar</button><button onClick={onConfirm} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 font-semibold">Confirmar Exclusão</button></div></div></div>);
 
 const Modal = ({ closeModal, modalType, handleAdd, handleUpdate, handleImport, partners, initialData }) => {
     const isEditMode = !!(initialData && initialData.id);
+    
+    // Lógica centralizada para submissão
+    const handleFormSubmit = (formData) => {
+        const collectionMap = {
+            partner: 'partners',
+            deal: 'deals',
+            resource: 'resources',
+            nurturing: 'nurturing',
+            activity: 'activities',
+        };
+        const collectionName = collectionMap[modalType];
+
+        if (isEditMode) {
+            handleUpdate(collectionName, initialData.id, formData);
+        } else {
+            handleAdd(collectionName, formData);
+        }
+    };
+    
     const renderForm = () => {
         switch (modalType) {
-            case 'partner': return <PartnerForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
-            case 'deal': return <DealForm onSubmit={isEditMode ? handleUpdate : handleAdd} partners={partners} initialData={initialData} />;
-            case 'resource': return <ResourceForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
-            case 'nurturing': return <NurturingForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
-            case 'activity': return <ActivityForm onSubmit={isEditMode ? handleUpdate : handleAdd} initialData={initialData} />;
+            case 'partner': return <PartnerForm onSubmit={handleFormSubmit} initialData={initialData} />;
+            case 'deal': return <DealForm onSubmit={handleFormSubmit} partners={partners} initialData={initialData} />;
+            case 'resource': return <ResourceForm onSubmit={handleFormSubmit} initialData={initialData} />;
+            case 'nurturing': return <NurturingForm onSubmit={handleFormSubmit} initialData={initialData} />;
+            case 'activity': return <ActivityForm onSubmit={handleFormSubmit} initialData={initialData} />;
             case 'importPayments': return <ImportForm collectionName="payments" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importPartners': return <ImportForm collectionName="partners" onSubmit={handleImport} closeModal={closeModal} partners={partners}/>;
             case 'importDeals': return <ImportForm collectionName="deals" partners={partners} onSubmit={handleImport} closeModal={closeModal} />;
@@ -575,28 +591,28 @@ const FormButton = ({ children, ...props }) => (<button type="submit" {...props}
 const PartnerForm = ({ onSubmit, initialData }) => {
     const [formData, setFormData] = useState({ name: initialData?.name || '', type: initialData?.type || 'Finder', contactName: initialData?.contactName || '', contactEmail: initialData?.contactEmail || '' });
     const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    const handleSubmit = (e) => { e.preventDefault(); if (initialData?.id) onSubmit('partners', initialData.id, formData); else onSubmit('partners', formData); };
+    const handleSubmit = (e) => { e.preventDefault(); onSubmit(formData); };
     return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="name" name="name" label="Nome do Parceiro" value={formData.name} onChange={handleChange} required /><FormSelect id="type" name="type" label="Tipo de Parceiro" value={formData.type} onChange={handleChange} required><option value="Finder">Finder</option><option value="Seller">Seller</option></FormSelect><FormInput id="contactName" name="contactName" label="Nome do Contato" value={formData.contactName} onChange={handleChange} required /><FormInput id="contactEmail" name="contactEmail" label="Email do Contato" type="email" value={formData.contactEmail} onChange={handleChange} required /><FormButton>{initialData?.id ? 'Salvar Alterações' : 'Salvar Parceiro'}</FormButton></form>);
 };
 
 const DealForm = ({ onSubmit, partners, initialData }) => {
     const [formData, setFormData] = useState({ clientName: initialData?.clientName || '', partnerId: initialData?.partnerId || '', submissionDate: initialData?.submissionDate?.toDate().toISOString().split('T')[0] || new Date().toISOString().split('T')[0], value: initialData?.value || '', status: initialData?.status || 'Pendente' });
     const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    const handleSubmit = (e) => { e.preventDefault(); const selectedPartner = partners.find(p => p.id === formData.partnerId); const dataToSubmit = { ...formData, value: formData.value, partnerName: selectedPartner ? selectedPartner.name : 'N/A' }; if (initialData?.id) onSubmit('deals', initialData.id, dataToSubmit); else onSubmit('deals', dataToSubmit); };
+    const handleSubmit = (e) => { e.preventDefault(); const selectedPartner = partners.find(p => p.id === formData.partnerId); const dataToSubmit = { ...formData, value: formData.value, partnerName: selectedPartner ? selectedPartner.name : 'N/A' }; onSubmit(dataToSubmit); };
     return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="clientName" name="clientName" label="Nome do Cliente Final" value={formData.clientName} onChange={handleChange} required /><FormSelect id="partnerId" name="partnerId" label="Parceiro Responsável" value={formData.partnerId} onChange={handleChange} required><option value="">Selecione um parceiro</option>{partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</FormSelect><FormInput id="submissionDate" name="submissionDate" label="Data da Indicação" type="date" value={formData.submissionDate} onChange={handleChange} required /><FormInput id="value" name="value" label="Valor Estimado (R$)" type="text" value={formData.value} onChange={handleChange} required placeholder="Ex: 1.250,50" /><FormSelect id="status" name="status" label="Status" value={formData.status} onChange={handleChange} required><option>Pendente</option><option>Aprovado</option><option>Ganho</option><option>Perdido</option></FormSelect><FormButton>{initialData?.id ? 'Salvar Alterações' : 'Registrar Oportunidade'}</FormButton></form>);
 };
 
 const ResourceForm = ({ onSubmit, initialData }) => {
     const [formData, setFormData] = useState({ title: initialData?.title || '', description: initialData?.description || '', url: initialData?.url || '', category: initialData?.category || 'Marketing' });
     const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    const handleSubmit = (e) => { e.preventDefault(); if (initialData?.id) onSubmit('resources', initialData.id, formData); else onSubmit('resources', formData); };
+    const handleSubmit = (e) => { e.preventDefault(); onSubmit(formData); };
     return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="title" name="title" label="Título do Recurso" value={formData.title} onChange={handleChange} required /><FormTextarea id="description" name="description" label="Descrição" value={formData.description} onChange={handleChange} required /><FormInput id="url" name="url" label="URL do Recurso" type="url" value={formData.url} onChange={handleChange} required /><FormSelect id="category" name="category" label="Categoria" value={formData.category} onChange={handleChange} required><option>Marketing</option><option>Vendas</option><option>Técnico</option><option>Legal</option></FormSelect><FormButton>{initialData?.id ? 'Salvar Alterações' : 'Salvar Recurso'}</FormButton></form>);
 };
 
 const NurturingForm = ({ onSubmit, initialData }) => {
     const [formData, setFormData] = useState({ title: initialData?.title || '', content: initialData?.content || '' });
     const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    const handleSubmit = (e) => { e.preventDefault(); if (initialData?.id) onSubmit('nurturing', initialData.id, formData); else onSubmit('nurturing', formData); };
+    const handleSubmit = (e) => { e.preventDefault(); onSubmit(formData); };
     return (<form onSubmit={handleSubmit} className="space-y-4"><FormInput id="title" name="title" label="Título do Conteúdo" value={formData.title} onChange={handleChange} required /><FormTextarea id="content" name="content" label="Conteúdo/Direcionamento" value={formData.content} onChange={handleChange} required /><FormButton>{initialData?.id ? 'Salvar Alterações' : 'Publicar Conteúdo'}</FormButton></form>);
 };
 
@@ -609,14 +625,7 @@ const ActivityForm = ({ onSubmit, initialData }) => {
         partnerName: initialData?.partnerName
     });
     const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        if (initialData?.id) {
-            onSubmit('activities', initialData.id, formData);
-        } else {
-            onSubmit('activities', formData);
-        }
-    };
+    const handleSubmit = (e) => { e.preventDefault(); onSubmit(formData); };
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <FormInput id="title" name="title" label="Título da Atividade" value={formData.title} onChange={handleChange} required />
