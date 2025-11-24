@@ -47,9 +47,7 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
                                 <th className="p-4 font-semibold text-slate-600">Nome do Parceiro</th>
                                 <th className="p-4 font-semibold text-slate-600">Tipo</th>
                                 <th className="p-4 font-semibold text-slate-600">Nível</th>
-                                <th className="p-4 font-semibold text-slate-600">Pagamentos Recebidos</th>
                                 <th className="p-4 font-semibold text-slate-600">Receita Gerada (Ganhos)</th>
-                                <th className="p-4 font-semibold text-slate-600">Comissão a Pagar</th>
                                 <th className="p-4 font-semibold text-slate-600">Ações</th>
                             </tr>
                         </thead>
@@ -64,9 +62,7 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
                                             {p.tier.name}
                                         </span>
                                     </td>
-                                    <td className="p-4 text-slate-600 font-medium">{formatCurrency(p.paymentsReceived)}</td>
                                     <td className="p-4 text-slate-600 font-medium">{formatCurrency(p.generatedRevenue)}</td>
-                                    <td className="p-4 text-green-600 font-bold">{formatCurrency(p.commissionToPay)}</td>
                                     <td className="p-4 relative" onClick={(e) => e.stopPropagation()}>
                                         <ActionsMenu onEdit={() => onEdit('partner', p)} onDelete={() => onDelete('partners', p.id)} />
                                     </td>

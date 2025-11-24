@@ -19,7 +19,7 @@ const RecentActivities = ({ activities, partners }) => {
                 ) : (
                     <ul className="divide-y divide-slate-100">
                         {activities.slice(0, 5).map(activity => (
-                             <li key={activity.id} className="p-3 flex items-start space-x-4">
+                            <li key={activity.id} className="p-3 flex items-start space-x-4">
                                 <div className="bg-sky-100 rounded-full p-2">
                                     <ActivityIcon className="h-5 w-5 text-sky-600" />
                                 </div>
@@ -42,22 +42,20 @@ const RecentActivities = ({ activities, partners }) => {
 };
 
 const Dashboard = ({ partners, deals, activities }) => { // <<< ALTERAÇÃO: Não recebe mais DealList como prop
-    const { totalPayments, totalGeneratedRevenue } = useMemo(() => {
-        const totalPayments = partners.reduce((sum, p) => sum + p.paymentsReceived, 0);
+    const { totalGeneratedRevenue } = useMemo(() => {
         const totalGeneratedRevenue = partners.reduce((sum, p) => sum + p.generatedRevenue, 0);
-        return { totalPayments, totalGeneratedRevenue };
+        return { totalGeneratedRevenue };
     }, [partners]);
-    
+
     const stats = [
         { title: 'Total de Parceiros', value: partners.length, icon: Users, color: 'text-blue-500' },
         { title: 'Oportunidades no Período', value: deals.length, icon: Briefcase, color: 'text-orange-500' },
         { title: 'Receita Gerada (Ganhos)', value: formatCurrency(totalGeneratedRevenue), icon: Target, color: 'text-indigo-500' },
-        { title: 'Pagamentos Recebidos', value: formatCurrency(totalPayments), icon: DollarSign, color: 'text-green-500' },
     ];
 
     return (
         <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
                 {stats.map(stat => (
                     <div key={stat.title} className="bg-white p-6 rounded-xl shadow-md flex items-center">
                         <div className={`p-3 rounded-full bg-opacity-20 ${stat.color.replace('text-', 'bg-')}`}>
@@ -74,13 +72,13 @@ const Dashboard = ({ partners, deals, activities }) => { // <<< ALTERAÇÃO: Nã
                 <div>
                     <h2 className="text-xl font-bold text-slate-700 mb-4">Oportunidades Recentes no Período</h2>
                     <div className="bg-white p-4 rounded-xl shadow-md">
-                        <DealList 
-                            deals={deals.slice(0, 5)} 
-                            partners={partners} 
+                        <DealList
+                            deals={deals.slice(0, 5)}
+                            partners={partners}
                             isMini={true}
                             // Estas props não são necessárias na versão mini, mas mantemos para consistência
-                            selectedDeals={[]} 
-                            setSelectedDeals={() => {}}
+                            selectedDeals={[]}
+                            setSelectedDeals={() => { }}
                         />
                     </div>
                 </div>

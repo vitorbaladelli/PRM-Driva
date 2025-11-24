@@ -20,10 +20,12 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
         const lowerTerm = searchTerm.toLowerCase();
         return deals.filter(d => {
             const partnerName = partnerNameMap[d.partnerId] || d.partnerName || '';
+            const clientName = d.clientName || '';
+            const status = d.status || '';
             return (
-                d.clientName.toLowerCase().includes(lowerTerm) ||
+                clientName.toLowerCase().includes(lowerTerm) ||
                 partnerName.toLowerCase().includes(lowerTerm) ||
-                d.status.toLowerCase().includes(lowerTerm)
+                status.toLowerCase().includes(lowerTerm)
             );
         });
     }, [deals, searchTerm, partnerNameMap]);
