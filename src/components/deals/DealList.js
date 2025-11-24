@@ -35,10 +35,10 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
     const [paginatedDeals, PaginatorComponent] = usePagination(filteredDeals);
 
     useEffect(() => {
-        if (setSelectedDeals) {
+        if (setSelectedDeals && deals) {
             setSelectedDeals([]);
         }
-    }, [deals.length, setSelectedDeals]); // Removido currentPage para evitar resetar a seleção ao paginar
+    }, [deals?.length, setSelectedDeals]);
 
     const handleSelectAll = (e) => setSelectedDeals(e.target.checked ? paginatedDeals.map(d => d.id) : []);
     const handleSelectOne = (e, id) => setSelectedDeals(e.target.checked ? [...selectedDeals, id] : selectedDeals.filter(dealId => dealId !== id));
