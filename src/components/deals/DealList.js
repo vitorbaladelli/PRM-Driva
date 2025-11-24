@@ -16,9 +16,11 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
     }, [partners]);
 
     const filteredDeals = useMemo(() => {
+        if (!deals || !Array.isArray(deals)) return [];
         if (!searchTerm) return deals;
         const lowerTerm = searchTerm.toLowerCase();
         return deals.filter(d => {
+            if (!d) return false;
             const partnerName = partnerNameMap[d.partnerId] || d.partnerName || '';
             const clientName = d.clientName || '';
             const status = d.status || '';

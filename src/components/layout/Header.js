@@ -19,7 +19,6 @@ const Header = ({ openModal, startDate, endDate, setStartDate, setEndDate, selec
         '/partners': { label: 'Novo Parceiro', action: () => openModal('partner') },
         '/opportunities': { label: 'Registrar Oportunidade', action: () => openModal('deal') },
         '/resources': { label: 'Novo Recurso', action: () => openModal('resource') },
-        '/nurturing': { label: 'Novo Conteúdo', action: () => openModal('nurturing') },
     };
     const showFilters = ['/', '/partners', '/opportunities', '/commissioning'].includes(location.pathname) || isDetailView;
 
