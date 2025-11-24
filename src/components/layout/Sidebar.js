@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { signOut } from 'firebase/auth';
 import {
-    Users, Briefcase, BadgePercent, Book, LayoutDashboard, LogOut, Handshake, Lightbulb
+    Users, Briefcase, Book, LayoutDashboard, LogOut, Handshake, Lightbulb
 } from 'lucide-react';
 
 const Sidebar = ({ auth }) => {
@@ -12,7 +12,6 @@ const Sidebar = ({ auth }) => {
         { path: '/', label: 'Dashboard', icon: LayoutDashboard },
         { path: '/partners', label: 'Parceiros', icon: Users },
         { path: '/opportunities', label: 'Oportunidades', icon: Briefcase },
-        { path: '/commissioning', label: 'Comissionamento', icon: BadgePercent },
         { path: '/resources', label: 'Recursos', icon: Book },
         { path: '/nurturing', label: 'Nutrição', icon: Lightbulb },
     ];
@@ -29,11 +28,10 @@ const Sidebar = ({ auth }) => {
                         <li key={item.path} className="px-3 sm:px-6 py-1">
                             <Link
                                 to={item.path}
-                                className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${
-                                    location.pathname === item.path || (location.pathname.startsWith(item.path) && item.path !== '/')
+                                className={`w-full flex items-center p-2 rounded-md transition-colors duration-200 ${location.pathname === item.path || (location.pathname.startsWith(item.path) && item.path !== '/')
                                         ? 'bg-sky-500 text-white'
                                         : 'hover:bg-slate-700'
-                                }`}
+                                    }`}
                             >
                                 <item.icon className="h-5 w-5" />
                                 <span className="hidden sm:inline ml-4 font-medium">{item.label}</span>
