@@ -18,22 +18,6 @@ const DealList = ({ deals = [], partners = [], onEdit, onDelete, selectedDeals =
         return map;
     }, [partners]);
 
-    const handleSelectAll = (e) => setSelectedDeals(e.target.checked ? paginatedDeals.map(d => d.id) : []);
-    const handleSelectOne = (e, id) => setSelectedDeals(e.target.checked ? [...safeSelectedDeals, id] : safeSelectedDeals.filter(dealId => dealId !== id));
-
-    const filteredDeals = useMemo(() => {
-        if (!Array.isArray(deals)) return [];
-        return deals.filter(deal => {
-            const searchLower = searchTerm.toLowerCase();
-            const clientName = deal.clientName?.toLowerCase() || '';
-            const partnerName = (partnerNameMap[deal.partnerId] || deal.partnerName || '').toLowerCase();
-
-            return clientName.includes(searchLower) || partnerName.includes(searchLower);
-        });
-    }, [deals, searchTerm, partnerNameMap]);
-
-    const [paginatedDeals, PaginatorComponent] = usePagination(filteredDeals, 10);
-
     return (
         <div className="space-y-4">
             {!isMini && (
