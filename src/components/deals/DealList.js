@@ -71,7 +71,7 @@ const DealList = ({ deals = [], partners = [], onEdit, onDelete, selectedDeals =
                         <tbody>
                             {paginatedDeals.map(d => (<tr key={d.id} className={`border-b border-slate-100 ${safeSelectedDeals.includes(d.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
                                 {!isMini && <td className="p-4"><input type="checkbox" checked={safeSelectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
-                                {!isMini && <td className="p-4 text-slate-600">{d.submissionDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td>}
+                                {!isMini && <td className="p-4 text-slate-600">{d.submissionDate && typeof d.submissionDate.toDate === 'function' ? d.submissionDate.toDate().toLocaleDateString('pt-BR') : 'N/A'}</td>}
                                 <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
                                 <td className="p-4 text-slate-600">{partnerNameMap[d.partnerId] || d.partnerName || 'Desconhecido'}</td>
                                 <td className="p-4 text-slate-600">{formatCurrency(parseBrazilianCurrency(d.value))}</td>
