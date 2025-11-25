@@ -4,22 +4,25 @@ import { formatCurrency, parseBrazilianCurrency } from '../../utils/formatter';
 import usePagination from '../../hooks/usePagination';
 import ActionsMenu from '../common/ActionsMenu';
 
-const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelectedDeals, isMini = false }) => {
+const DealList = ({ deals = [], partners = [], onEdit, onDelete, selectedDeals = [], setSelectedDeals, isMini = false }) => {
     const statusColors = { 'Pendente': 'bg-yellow-100 text-yellow-800', 'Aprovado': 'bg-blue-100 text-blue-800', 'Ganho': 'bg-green-100 text-green-800', 'Perdido': 'bg-red-100 text-red-800' };
     const [searchTerm, setSearchTerm] = useState('');
 
+    // Ensure selectedDeals is always an array
+    const safeSelectedDeals = Array.isArray(selectedDeals) ? selectedDeals : [];
+
     const partnerNameMap = useMemo(() => {
-        if (!partners) return {};
+        if (!Array.isArray(partners)) return {};
         const map = {};
         partners.forEach(p => { map[p.id] = p.name; });
         return map;
     }, [partners]);
 
     const handleSelectAll = (e) => setSelectedDeals(e.target.checked ? paginatedDeals.map(d => d.id) : []);
-    const handleSelectOne = (e, id) => setSelectedDeals(e.target.checked ? [...selectedDeals, id] : selectedDeals.filter(dealId => dealId !== id));
+    const handleSelectOne = (e, id) => setSelectedDeals(e.target.checked ? [...safeSelectedDeals, id] : safeSelectedDeals.filter(dealId => dealId !== id));
 
     const filteredDeals = useMemo(() => {
-        if (!deals) return [];
+        if (!Array.isArray(deals)) return [];
         return deals.filter(deal => {
             const searchLower = searchTerm.toLowerCase();
             const clientName = deal.clientName?.toLowerCase() || '';
@@ -56,7 +59,7 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
                     <table className="w-full text-left">
                         <thead className={!isMini ? "bg-slate-50 border-b border-slate-200" : ""}>
                             <tr>
-                                {!isMini && <th className="p-4"><input type="checkbox" onChange={handleSelectAll} checked={paginatedDeals.length > 0 && selectedDeals.length === paginatedDeals.length} className="rounded" /></th>}
+                                {!isMini && <th className="p-4"><input type="checkbox" onChange={handleSelectAll} checked={paginatedDeals.length > 0 && safeSelectedDeals.length === paginatedDeals.length} className="rounded" /></th>}
                                 {!isMini && <th className="p-4 font-semibold text-slate-600">Data</th>}
                                 <th className="p-4 font-semibold text-slate-600">Cliente Final</th>
                                 <th className="p-4 font-semibold text-slate-600">Parceiro</th>
@@ -66,8 +69,8 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
                             </tr>
                         </thead>
                         <tbody>
-                            {paginatedDeals.map(d => (<tr key={d.id} className={`border-b border-slate-100 ${selectedDeals && selectedDeals.includes(d.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
-                                {!isMini && <td className="p-4"><input type="checkbox" checked={selectedDeals && selectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
+                            {paginatedDeals.map(d => (<tr key={d.id} className={`border-b border-slate-100 ${safeSelectedDeals.includes(d.id) ? 'bg-sky-50' : 'hover:bg-slate-50'}`}>
+                                {!isMini && <td className="p-4"><input type="checkbox" checked={safeSelectedDeals.includes(d.id)} onChange={(e) => handleSelectOne(e, d.id)} className="rounded" /></td>}
                                 {!isMini && <td className="p-4 text-slate-600">{d.submissionDate?.toDate().toLocaleDateString('pt-BR') || 'N/A'}</td>}
                                 <td className="p-4 text-slate-800 font-medium">{d.clientName}</td>
                                 <td className="p-4 text-slate-600">{partnerNameMap[d.partnerId] || d.partnerName || 'Desconhecido'}</td>
