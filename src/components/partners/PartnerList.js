@@ -8,16 +8,21 @@ import ActionsMenu from '../common/ActionsMenu';
 const PartnerList = ({ partners, onEdit, onDelete }) => {
     const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState('');
+    const [responsibleFilter, setResponsibleFilter] = useState('');
 
     const filteredPartners = useMemo(() => {
-        if (!searchTerm) return partners;
-        const lowerTerm = searchTerm.toLowerCase();
-        return partners.filter(p =>
-            p.name.toLowerCase().includes(lowerTerm) ||
-            p.type.toLowerCase().includes(lowerTerm) ||
-            (p.contactName && p.contactName.toLowerCase().includes(lowerTerm))
-        );
-    }, [partners, searchTerm]);
+        return partners.filter(p => {
+            const lowerTerm = searchTerm.toLowerCase();
+            const matchesSearch = !searchTerm ||
+                p.name.toLowerCase().includes(lowerTerm) ||
+                p.type.toLowerCase().includes(lowerTerm) ||
+                (p.contactName && p.contactName.toLowerCase().includes(lowerTerm));
+
+            const matchesResponsible = !responsibleFilter || p.responsible === responsibleFilter;
+
+            return matchesSearch && matchesResponsible;
+        });
+    }, [partners, searchTerm, responsibleFilter]);
 
     const [paginatedPartners, PaginatorComponent] = usePagination(filteredPartners);
 
@@ -25,17 +30,31 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
         <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                 <h2 className="text-xl font-bold text-slate-800">Parceiros</h2>
-                <div className="relative w-full sm:w-72">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <Search className="h-5 w-5 text-slate-400" />
+                <div className="flex gap-2 w-full sm:w-auto">
+                    <div className="relative flex-1 sm:w-72">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Search className="h-5 w-5 text-slate-400" />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Buscar parceiros..."
+                            className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg leading-5 bg-white placeholder-slate-500 focus:outline-none focus:placeholder-slate-400 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 sm:text-sm transition duration-150 ease-in-out"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
                     </div>
-                    <input
-                        type="text"
-                        placeholder="Buscar parceiros..."
-                        className="block w-full pl-10 pr-3 py-2 border border-slate-300 rounded-lg leading-5 bg-white placeholder-slate-500 focus:outline-none focus:placeholder-slate-400 focus:ring-1 focus:ring-sky-500 focus:border-sky-500 sm:text-sm transition duration-150 ease-in-out"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+                    <select
+                        value={responsibleFilter}
+                        onChange={(e) => setResponsibleFilter(e.target.value)}
+                        className="px-3 py-2 border border-slate-300 rounded-lg bg-white text-sm focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500"
+                    >
+                        <option value="">Todos os Responsáveis</option>
+                        <option value="Sem responsável">Sem responsável</option>
+                        <option value="Elimar">Elimar</option>
+                        <option value="Milton">Milton</option>
+                        <option value="Renata">Renata</option>
+                        <option value="Vitor">Vitor</option>
+                    </select>
                 </div>
             </div>
 
@@ -47,6 +66,7 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
                                 <th className="p-4 font-semibold text-slate-600">Nome do Parceiro</th>
                                 <th className="p-4 font-semibold text-slate-600">Tipo</th>
                                 <th className="p-4 font-semibold text-slate-600">Nível</th>
+                                <th className="p-4 font-semibold text-slate-600">Responsável</th>
                                 <th className="p-4 font-semibold text-slate-600">Receita Gerada (Ganhos)</th>
                                 <th className="p-4 font-semibold text-slate-600">Ações</th>
                             </tr>
@@ -62,6 +82,7 @@ const PartnerList = ({ partners, onEdit, onDelete }) => {
                                             {p.tier.name}
                                         </span>
                                     </td>
+                                    <td className="p-4 text-slate-600">{p.responsible || 'Sem responsável'}</td>
                                     <td className="p-4 text-slate-600 font-medium">{formatCurrency(p.generatedRevenue)}</td>
                                     <td className="p-4 relative" onClick={(e) => e.stopPropagation()}>
                                         <ActionsMenu onEdit={() => onEdit('partner', p)} onDelete={() => onDelete('partners', p.id)} />

@@ -7,7 +7,8 @@ const PartnerForm = ({ onSubmit, initialData }) => {
         type: initialData?.type || 'Finder',
         tier: initialData?.tier || 'Prata',
         contactName: initialData?.contactName || '',
-        contactEmail: initialData?.contactEmail || ''
+        contactEmail: initialData?.contactEmail || '',
+        responsible: initialData?.responsible || 'Sem responsável'
     });
 
     const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -31,6 +32,13 @@ const PartnerForm = ({ onSubmit, initialData }) => {
             </FormSelect>
             <FormInput id="contactName" name="contactName" label="Nome do Contato" value={formData.contactName} onChange={handleChange} required />
             <FormInput id="contactEmail" name="contactEmail" label="Email do Contato" type="email" value={formData.contactEmail} onChange={handleChange} required />
+            <FormSelect id="responsible" name="responsible" label="Responsável Driva" value={formData.responsible} onChange={handleChange}>
+                <option value="Sem responsável">Sem responsável</option>
+                <option value="Elimar">Elimar</option>
+                <option value="Milton">Milton</option>
+                <option value="Renata">Renata</option>
+                <option value="Vitor">Vitor</option>
+            </FormSelect>
             <FormButton>{initialData?.id ? 'Salvar Alterações' : 'Salvar Parceiro'}</FormButton>
         </form>
     );
