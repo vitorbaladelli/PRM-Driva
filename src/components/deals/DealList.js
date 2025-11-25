@@ -15,33 +15,21 @@ const DealList = ({ deals, partners, onEdit, onDelete, selectedDeals, setSelecte
         return map;
     }, [partners]);
 
+    const handleSelectAll = (e) => setSelectedDeals(e.target.checked ? paginatedDeals.map(d => d.id) : []);
+    const handleSelectOne = (e, id) => setSelectedDeals(e.target.checked ? [...selectedDeals, id] : selectedDeals.filter(dealId => dealId !== id));
+
     const filteredDeals = useMemo(() => {
-        if (!deals || !Array.isArray(deals)) return [];
-        if (!searchTerm) return deals;
-        const lowerTerm = searchTerm.toLowerCase();
-        return deals.filter(d => {
-            if (!d) return false;
-            const partnerName = partnerNameMap[d.partnerId] || d.partnerName || '';
-            const clientName = d.clientName || '';
-            const status = d.status || '';
-            return (
-                clientName.toLowerCase().includes(lowerTerm) ||
-                partnerName.toLowerCase().includes(lowerTerm) ||
-                status.toLowerCase().includes(lowerTerm)
-            );
+        if (!deals) return [];
+        return deals.filter(deal => {
+            const searchLower = searchTerm.toLowerCase();
+            const clientName = deal.clientName?.toLowerCase() || '';
+            const partnerName = (partnerNameMap[deal.partnerId] || deal.partnerName || '').toLowerCase();
+
+            return clientName.includes(searchLower) || partnerName.includes(searchLower);
         });
     }, [deals, searchTerm, partnerNameMap]);
 
-    const [paginatedDeals, PaginatorComponent] = usePagination(filteredDeals);
-
-    useEffect(() => {
-        if (setSelectedDeals && deals) {
-            setSelectedDeals([]);
-        }
-    }, [deals?.length, setSelectedDeals]);
-
-    const handleSelectAll = (e) => setSelectedDeals(e.target.checked ? paginatedDeals.map(d => d.id) : []);
-    const handleSelectOne = (e, id) => setSelectedDeals(e.target.checked ? [...selectedDeals, id] : selectedDeals.filter(dealId => dealId !== id));
+    const [paginatedDeals, PaginatorComponent] = usePagination(filteredDeals, 10);
 
     return (
         <div className="space-y-4">
